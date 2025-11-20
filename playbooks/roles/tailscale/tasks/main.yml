@@ -1,0 +1,43 @@
+- name: Add Tailscale repo key
+  apt_key:
+    url: https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_distribution_release }}.gpg
+    state: present
+
+- name: Add Tailscale repo
+  apt_repository:
+    repo: "deb https://pkgs.tailscale.com/stable/ubuntu {{ ansible_distribution_release }} main"
+    state: present
+
+- name: Install tailscale
+  apt:
+    name: tailscale
+    state: present
+    update_cache: true
+
+- name: Enable and start tailscaled
+  systemd:
+    name: tailscaled
+    state: started
+    enabled: true
+
+- name: Check Tailscale status
+  ansible.builtin.command: tailscale status --peers=false
+  register: ts_status
+  changed_when: false
+  failed_when: false
+
+- name: Login & configure Tailscale
+  ansible.builtin.command: >
+    tailscale up
+    --hostname={{ tailscale_hostname }}
+    --operator={{ tailscale_operator }}
+    --ssh=true
+  environment:
+    TS_AUTHKEY: "{{ tailscale_authkey }}"  # safer than CLI arg
+  when: ts_status.rc != 0 or
+        ('Logged out' in (ts_status.stderr | default('')))
+  register: ts_up
+  # "changed" only when tailscale actually accepts the command
+  changed_when: ts_up.rc == 0
+  failed_when: ts_up.rc != 0
+#  no_log: true

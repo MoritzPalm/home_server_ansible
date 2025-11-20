@@ -1,0 +1,56 @@
+- name: Backup /etc/fstab once
+  ansible.builtin.copy:
+    src: /etc/fstab
+    dest: /etc/fstab.ansible.bak
+    backup: true
+    remote_src: true
+    force: false
+
+- name: Install mergerfs
+  apt:
+    name: mergerfs
+    state: present
+    update_cache: true
+
+- name: Ensure raw disk mountpoints exist
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    mode: "0755"
+  loop: "{{ hdd_mounts }}"
+
+- name: Assert all UUIDs are present
+  command: "blkid -t UUID={{ item.uuid }}"
+  register: blkid
+  failed_when: blkid.rc != 0
+  changed_when: false
+  loop: "{{ hdd_mounts }}"
+  check_mode: no
+
+- name: Mount HDDs by UUID and persist in fstab
+  mount:
+    path: "{{ item.path }}"
+    src: "UUID={{ item.uuid }}"
+    fstype: "{{ item.fstype | default('ext4') }}"
+    opts: "defaults,nofail,x-systemd.device-timeout=10s"
+    state: mounted
+  loop: "{{ hdd_mounts }}"
+
+- name: Ensure mergerfs mountpoint exists
+  file:
+    path: "{{ mergerfs.mount }}"
+    state: directory
+    mode: "0755"
+
+- name: Mount mergerfs pool and persist
+  mount:
+    path: "{{ mergerfs.mount }}"
+    src: "{{ mergerfs.srcs | join(':') }}"
+    fstype: "fuse.mergerfs"
+    # include use_ino and reasonable defaults for media workflows
+    opts: "{{ mergerfs.opts | default('defaults,allow_other,use_ino,category.create=epmfs,minfreespace=50G,moveonenospc=true,dropcacheonclose=true,fsname=mergerfs') }}"
+    state: mounted
+
+- name: Verify pool is mounted
+  command: mountpoint -q {{ mergerfs.mount }}
+  changed_when: false

@@ -1,0 +1,18 @@
+timezone: Europe/Berlin
+admin_user: moritzpalm
+
+compose_root: /srv/compose
+
+mergerfs_default_opts: "direct_io,defaults,allow_other,minfreespace=50G,fsname=mergerfs,category.create=mfs,nonempty,dropcacheonclose=true,cache.files=auto-full,func.getattr=newest,moveonenospc=true"
+
+ssd_dirs: 
+  - "/srv/compose"
+  - "/srv/data/configs"
+  - "/srv/data/db"
+  - "/srv/data/cache"
+pool_dirs: 
+  - "/media/storage/media"
+  - "/media/storage/torrents"
+  - "/media/storage/backups"
+
+tailscale_operator: "moritzpalm" 

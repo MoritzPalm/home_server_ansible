@@ -1,0 +1,16 @@
+- name: Restart fail2ban
+  service:
+    name: fail2ban
+    state: restarted
+
+# Validate the SSH config before touching the service.
+- name: Validate sshd config
+  ansible.builtin.command: sshd -t
+  listen: Validate & Restart ssh
+
+# Only if validation passes, restart ssh.
+- name: Restart ssh
+  ansible.builtin.service:
+    name: ssh
+    state: restarted
+  listen: Validate & Restart ssh

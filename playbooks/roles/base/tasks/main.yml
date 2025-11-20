@@ -1,0 +1,52 @@
+- name: Set timezone
+  timezone: { name: "{{ timezone }}" }
+
+- name: Base packages present
+  apt:
+    name: [ca-certificates, curl, gnupg, ufw, fail2ban, unattended-upgrades, tmux, htop, git]
+    state: present
+    update_cache: true
+
+- name: SSH hardening
+  copy:
+    dest: /etc/ssh/sshd_config.d/99-hardening.conf
+    mode: "0644"
+    content: |
+      PermitRootLogin prohibit-password
+      PubkeyAuthentication yes
+      ChallengeResponseAuthentication no
+      UsePAM yes
+    notify: Validate & Restart ssh
+
+- name: UFW allow SSH and enable
+  ufw: { rule: allow, name: OpenSSH }
+- ufw: { state: enabled, policy: deny }
+
+- name: Enable fail2ban for sshd
+  copy:
+    dest: /etc/fail2ban/jail.d/sshd.local
+    mode: "0644"
+    content: |
+      [DEFAULT]
+      ignoreip = 192.168.178.0/24 127.0.0.1
+      [sshd]
+      enabled = true
+      port = ssh
+      maxretry = 4
+      backend = systemd
+  notify: Restart fail2ban
+
+- name: Create compose root
+  file: { path: "{{ compose_root }}", state: directory, owner: "{{ admin_user }}", group: docker, mode: "0775" }
+
+- name: Convenience dirs
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: docker
+    mode: "0775"
+  loop:
+    - /srv/data/configs
+    - /srv/data/db
+    - /srv/data/cache

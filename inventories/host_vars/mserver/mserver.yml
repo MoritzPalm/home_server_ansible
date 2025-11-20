@@ -1,0 +1,11 @@
+# storage
+hdd_mounts:
+  - { uuid: "c7ce78c0-0d5b-4c74-9b02-102b6a18cf71", path: "/mnt/hdd1", fstype: ext4 }
+  - { uuid: "36453ee3-a0b3-4002-b0b9-b6212855cf64", path: "/mnt/hdd2", fstype: ext4 }
+mergerfs:
+  mount: /mnt/storage
+  srcs: ["/mnt/hdd1", "/mnt/hdd2"]
+
+
+tailscale_hostname: "mserver"
+tailscale_authkey: "{{ vault_tailscale_authkey }}"
