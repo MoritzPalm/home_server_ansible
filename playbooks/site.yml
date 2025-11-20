@@ -1,8 +1,8 @@
 - hosts: regensburg
   become: true
   roles:    
-    - tailscale
+#    - tailscale
 #    - base
 #    - storage
 #    - geerlingguy.docker
-
+     - docker

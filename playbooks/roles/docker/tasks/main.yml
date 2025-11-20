@@ -1,0 +1,20 @@
+- name: clone repository containing compose files
+  ansible.builtin.git:
+    repo: 'https://github.com/MoritzPalm/home_server_compose.git'
+    dest: '{{ compose_root }}'
+    accept_newhostkey: true
+    single_branch: yes
+    version: main
+
+- name: create env file for portainer
+  copy:
+    dest: "{{ compose_root }}/portainer/.env"
+    owner: root
+    group: docker
+    content: admin-password={{ portainer_admin_password }}
+
+- name: run portainer docker compose file
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_root }}/portainer"
+    files: "portainer.yml"
+
