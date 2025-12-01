@@ -2,6 +2,11 @@ timezone: Europe/Berlin
 admin_user: moritzpalm
 
 compose_root: /srv/compose
+config_dir: /srv/data/configs
+database_dir: /srv/data/db
+cache_dir: /srv/data/cache
+media_path: /mnt/storage/media
+torrent_dir: /mnt/storage/downloads
 
 mergerfs_default_opts: "direct_io,defaults,allow_other,minfreespace=50G,fsname=mergerfs,category.create=mfs,nonempty,dropcacheonclose=true,cache.files=auto-full,func.getattr=newest,moveonenospc=true"
 

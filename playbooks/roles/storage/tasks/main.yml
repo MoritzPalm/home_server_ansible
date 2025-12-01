@@ -54,3 +54,25 @@
 - name: Verify pool is mounted
   command: mountpoint -q {{ mergerfs.mount }}
   changed_when: false
+
+
+- name: ensure media directories exist
+  file: 
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: docker
+  loop:
+    - "{{ torrent_dir }}"
+    - "{{ torrent_dir }}/incomplete"
+    - "{{ torrent_dir }}/complete"
+
+- name: ensure media directories have correct permissions
+  ansible.builtin.file:
+    path: "{{ torrent_dir }}"
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0775"
+    recurse: yes
+
+

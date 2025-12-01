@@ -1,0 +1,13 @@
+- name: Deplay arr docker stack
+  import_tasks: docker.yml
+  tags:
+    - arr
+    - arr-docker
+
+- name: Configure Prowlarr
+  import_tasks: prowlarr.yml
+  tags:
+    - arr
+    - prowlarr
+
+

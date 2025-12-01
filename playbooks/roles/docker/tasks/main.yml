@@ -5,16 +5,28 @@
     accept_newhostkey: true
     single_branch: yes
     version: main
+    force: true
+
+- name: create admin password file for portainer
+  copy:
+    dest: "{{ compose_root }}/portainer/admin_password.txt"
+    owner: root
+    group: docker
+    content: "{{ portainer_admin_password }}"
 
 - name: create env file for portainer
   copy:
     dest: "{{ compose_root }}/portainer/.env"
     owner: root
     group: docker
-    content: admin-password={{ portainer_admin_password }}
+    content: |
+      ADMIN_PASSWORD_FILE={{ compose_root }}/portainer/admin_password.txt
+      PORTAINER_LICENSE_KEY={{ portainer_license_key }}
 
 - name: run portainer docker compose file
   community.docker.docker_compose_v2:
     project_src: "{{ compose_root }}/portainer"
     files: "portainer.yml"
+
+
 

@@ -1,0 +1,212 @@
+- name: Wait for Prowlarr to be up
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/prowlarr/ping"
+    method: GET
+    status_code: 200
+  register: prowlarr_ping
+  retries: 30
+  delay: 2
+  until: prowlarr_ping.status == 200
+
+- name: Get existing Prowlarr applications
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/applications"
+    method: GET
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    return_content: true
+  register: prowlarr_apps
+
+# extract Sonarr / Radarr app IDs (or "" if not present)
+
+- name: Extract Sonarr / Radarr app IDs
+  set_fact:
+    prowlarr_sonarr_id: >-
+      {{
+        (prowlarr_apps.json
+         | selectattr('implementation', 'equalto', 'Sonarr')
+         | map(attribute='id')
+         | list
+         | first)
+        | default('', true)
+      }}
+    prowlarr_radarr_id: >-
+      {{
+        (prowlarr_apps.json
+         | selectattr('implementation', 'equalto', 'Radarr')
+         | map(attribute='id')
+         | list
+         | first)
+        | default('', true)
+      }}
+
+
+# desired config bodies (without id) 
+
+- name: Build Sonarr application body
+  set_fact:
+    prowlarr_sonarr_body:
+      name: "Sonarr"
+      implementation: "Sonarr"
+      configContract: "SonarrSettings"
+      enable: true
+      syncLevel: "fullSync"
+      fields:
+        - name: "prowlarrUrl"
+          value: "http://prowlarr:9696"
+        - name: "baseUrl"
+          value: "http://sonarr:8989"
+        - name: "apiKey"
+          value: "{{ sonarr_api_key }}"
+
+- name: Build Radarr application body
+  set_fact:
+    prowlarr_radarr_body:
+      name: "Radarr"
+      implementation: "Radarr"
+      configContract: "RadarrSettings"
+      enable: true
+      syncLevel: "fullSync"
+      fields:
+        - name: "prowlarrUrl"
+          value: "http://prowlarr:9696"
+        - name: "baseUrl"
+          value: "http://radarr:7878"
+        - name: "apiKey"
+          value: "{{ radarr_api_key }}"
+
+# create if missing 
+
+- name: Create Sonarr app in Prowlarr if it does not exist
+  when: prowlarr_sonarr_id == ''
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/applications"
+    method: POST
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_sonarr_body }}"
+    status_code: [200, 201]
+    return_content: true
+  register: prowlarr_sonarr_create
+
+- name: Create Radarr app in Prowlarr if it does not exist
+  when: prowlarr_radarr_id == ''
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/applications"
+    method: POST
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_radarr_body }}"
+    status_code: [200, 201]
+    return_content: true
+  register: prowlarr_radarr_create
+
+# update if existing 
+
+- name: Build Sonarr body with ID for update
+  when: prowlarr_sonarr_id != ''
+  set_fact:
+    prowlarr_sonarr_body_update: "{{ prowlarr_sonarr_body | combine({'id': prowlarr_sonarr_id}) }}"
+
+- name: Build Radarr body with ID for update
+  when: prowlarr_radarr_id != ''
+  set_fact:
+    prowlarr_radarr_body_update: "{{ prowlarr_radarr_body | combine({'id': prowlarr_radarr_id}) }}"
+
+- name: Update existing Sonarr app in Prowlarr
+  when: prowlarr_sonarr_id != ''
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/applications/{{ prowlarr_sonarr_id }}"
+    method: PUT
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_sonarr_body_update }}"
+    status_code: [200, 202]
+    return_content: true
+  register: prowlarr_sonarr_update
+
+- name: Update existing Radarr app in Prowlarr
+  when: prowlarr_radarr_id != ''
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/applications/{{ prowlarr_radarr_id }}"
+    method: PUT
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_radarr_body_update }}"
+    status_code: [200, 201, 202]
+    return_content: true
+  register: prowlarr_radarr_update
+
+
+- name: Get existing download clients (if any)
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/downloadclient"
+    method: GET
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    return_content: true
+  register: prowlarr_downloadclients
+
+
+- name: Extract downloadclient IDs
+  set_fact:
+    prowlarr_downloadclient_id_list: >-
+      {{ prowlarr_downloadclients.json
+         | map(attribute='id')
+         | list }}
+
+
+- name: Build qbittorrent application body
+  set_fact:
+    prowlarr_qbittorrent_body:
+      name: "qBittorrent"
+      implementation: "QBittorrent"
+      configContract: "QBittorrentSettings"
+      enable: true
+      protocol: "torrent"
+      fields:
+        - name: "host"
+          value: "gluetun"
+        - name: "port"
+          value: 8088
+        - name: "useSsl"
+          value: false
+        - name: "username"
+          value: "{{ qbittorrent_username }}"
+        - name: "password"
+          value: "{{ qbittorrent_password }}"
+        - name: "urlBase"
+          value: ""
+        - name: "category"
+          value: "prowlarr"
+        - name: "priority"
+          value: 0
+        - name: "initialState"
+          value: 0
+        - name: "sequentialOrder"
+          value: false
+        - name: "firstAndLast"
+          value: false
+        - name: "contentLayout"
+          value: 0
+      priority: 1
+      supportsCategories: true
+      categories: []
+      tags: []
+
+
+- name: Create qbittorrent app in prowlarr if missing
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/downloadclient"
+    method: POST
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_qbittorrent_body }}"
+    status_code: [200, 201]
+    return_content: true
+  register: prowlarr_qbittorrent_create

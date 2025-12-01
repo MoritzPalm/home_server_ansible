@@ -3,6 +3,7 @@
   roles:    
 #    - tailscale
 #    - base
-#    - storage
+#     - storage
 #    - geerlingguy.docker
-     - docker
+#     - docker
+    - arr

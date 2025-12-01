@@ -1,0 +1,32 @@
+- name: Create .env file for media stack
+  copy:
+    dest: "{{ compose_root }}/media/.env"
+    owner: root
+    group: docker
+    mode: "0640"
+    content: |
+      MEDIA_PATH={{ media_path }}
+      CONFIG_DIR={{ config_dir }}
+
+#- name: run media compose file
+#  community.docker.docker_compose_v2:
+#    project_src: "{{ compose_root }}/media"
+#    files: "media.yml"
+
+- name: create env file for arr stack
+  copy:
+    dest: "{{ compose_root }}/arr/.env"
+    owner: root
+    group: docker
+    content: |
+      CONFIG_DIR={{ config_dir }}
+      MEDIA_PATH={{ media_path }}
+      OPENVPN_USERNAME={{ openvpn_username }}
+      OPENVPN_PASSWORD={{ openvpn_password }}
+      TORRENT_PATH={{ torrent_dir }}
+
+
+- name: run arr compose file
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_root }}/arr"
+    files: "arr.yml"
