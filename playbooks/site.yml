@@ -2,8 +2,8 @@
   become: true
   roles:    
 #    - tailscale
-#    - base
+    - base
 #     - storage
 #    - geerlingguy.docker
-#     - docker
+    - docker
     - arr

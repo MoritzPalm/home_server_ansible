@@ -8,10 +8,10 @@
       MEDIA_PATH={{ media_path }}
       CONFIG_DIR={{ config_dir }}
 
-#- name: run media compose file
-#  community.docker.docker_compose_v2:
-#    project_src: "{{ compose_root }}/media"
-#    files: "media.yml"
+- name: run media compose file
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_root }}/media"
+    files: "media.yml"
 
 - name: create env file for arr stack
   copy:
@@ -24,6 +24,80 @@
       OPENVPN_USERNAME={{ openvpn_username }}
       OPENVPN_PASSWORD={{ openvpn_password }}
       TORRENT_PATH={{ torrent_dir }}
+
+- name: create yml config file for soulseek
+  copy:
+    dest: "{{ config_dir }}/slskd/slskd.yml"
+    owner: root
+    group: docker
+    content: |
+      remote_configuration: true
+      headless: false # change this as soon as soularr works
+      directories:
+        incomplete: /downloads/incomplete
+        downloads: /downloads/complete
+      remote_file_management: true
+      shares:
+        directories:
+          - "/music"
+      soulseek:
+        username: {{ soulseek_username }}
+        password: {{ soulseek_password }}
+      web:
+        authentication:
+          disabled: false
+          username: slskd
+          password: slskd
+          api_keys:
+            soularr_api_key:
+              key: {{ slskd_api_key }}
+              cidr: 129.168.178.0/24
+      
+
+
+- name: create config file for soularr
+  copy:
+    dest: "{{ config_dir }}/soularr/config.ini"
+    owner: root
+    group: docker
+    content: |
+      [Lidarr]
+      api_key = {{ lidarr_api_key }}
+      host_url = http://lidarr:8686
+      download_dir = {{ torrent_dir }}/complete
+      disable_sync = False
+      [Slskd]
+      api_key = {{ slskd_api_key }}
+      host_url = http://slskd:5030
+      url_base = /
+      download_dir = /downloads
+      delete_searches = False
+      stalled_timeout = 3600
+      [Release Settings]
+      use_most_common_tracknum = True
+      allow_multi_disc = True
+      accepted_countries = Europe,Japan,United Kingdom,United States,[Worldwide],Australia,Canada
+      accepted_format = CD,Digital Media,Vinyl
+      [Search Settings]
+      search_timeout = 5000
+      maximum_peer_queue = 50
+      minimum_peer_upload_speed = 0
+      minimum_filename_match_ration = 0.8
+      # preferred filetypes (most to least preferred)
+      allowed_filetypes = flac24/192,flac 16/44,flac,mp3 320,mp3
+      ignored_users=
+      search_for_tracks = True
+      album_prepend_artist = True
+      track_prepent_artist = True
+      search_type = incrementing_page
+      number_of_albums_to_grab = 10
+      remove_wanted_on_failure = False
+      search_source = missing
+      [Logging]
+      level = INFO
+      format = [%(levelname)s|%(module)s|L%(lineno)d] %(asctime)s: %(message)s
+      datefmt = %Y-%m-%dT%H:%M:%S%z
+
 
 
 - name: run arr compose file

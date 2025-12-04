@@ -6,6 +6,10 @@
     single_branch: yes
     version: main
     force: true
+  tags:
+    - docker
+    - arr
+    - media
 
 - name: create admin password file for portainer
   copy:

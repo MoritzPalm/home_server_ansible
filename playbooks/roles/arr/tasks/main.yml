@@ -8,6 +8,6 @@
   import_tasks: prowlarr.yml
   tags:
     - arr
-    - prowlarr
+    - arr-prowlarr
 
 

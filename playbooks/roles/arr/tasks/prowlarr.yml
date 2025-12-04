@@ -200,6 +200,11 @@
 
 
 - name: Create qbittorrent app in prowlarr if missing
+  when: >
+    (prowlarr_downloadclients.json
+     | selectattr('implementation', 'equalto', 'QBittorrent')
+     | list
+     | length) == 0
   uri:
     url: "http://{{ ansible_ssh_host }}:9696/api/v1/downloadclient"
     method: POST
