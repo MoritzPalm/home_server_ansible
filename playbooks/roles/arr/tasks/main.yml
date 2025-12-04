@@ -10,4 +10,10 @@
     - arr
     - arr-prowlarr
 
+- name: Configure Lidarr
+  import_tasks: lidarr.yml
+  tags:
+    - arr
+    - arr-lidarr
+
 

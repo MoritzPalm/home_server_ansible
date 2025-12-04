@@ -1,0 +1,54 @@
+- name: wait for Lidarr to be up
+  uri:
+    url: "http://{{ ansible_ssh_host }}:8686/lidarr/ping"
+    method: GET
+    status_code: 200
+  register: lidarr_ping
+  retries: 30
+  delay: 2
+  until: lidarr_ping.status == 200
+
+- name: Get Lidarr root folders
+  uri:
+    url: "http://{{ ansible_ssh_host }}/api/v1/rootfolder"
+    method: GET
+    headers:
+      X-Api-Key: "{{ lidarr_api_key }}"
+    return_content: true
+  register: lidarr_root_folders
+
+- name: Extract Lidarr root folder paths
+  set_fact:
+    lidarr_root_folder_paths: >-
+      {{
+        (lidarr_root_folders.json
+        | map(attribute='path')
+        | list }}
+
+
+- name: Build Lidarr root folder
+  set_fact:
+    lidarr_root_folder_body:
+      name: "music"
+      path: "/data/music"
+      defaultMetadataProfileId: 1
+      defaultQualityProfileId: 1
+      defaultMonitorOption: "all"
+      defaultNewItemMonitorOption: "all"
+      defaultTags: []
+
+
+- name: Create Lidarr root folder if it does not exists with this path
+  when: (lidarr_root_folders|selectattr('path', 'contains', '/data/music')
+  uri:
+    url: "http://{{ ansible_ssh_host }}/api/v1/rootfolder"
+    method: POST
+    headers:
+      X-Api-Key: "{{ lidarr_api_key }}"
+    body_format: json
+    body: "{{ lidarr_root_folder_body }}"
+    status_code: [200, 201]
+    return_content: true
+  register: lidarr_rootfolder_create
+
+
