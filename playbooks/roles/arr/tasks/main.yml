@@ -1,3 +1,9 @@
+- name: Configure qbittorrent
+  import_tasks: qbittorrent.yml
+  tags:
+    - arr
+    - arr-qbittorrent
+
 - name: Deplay arr docker stack
   import_tasks: docker.yml
   tags:
@@ -16,4 +22,9 @@
     - arr
     - arr-lidarr
 
+- name: Configure Sonarr
+  import_tasks: sonarr.yml
+  tags:
+    - arr
+    - arr-sonarr
 

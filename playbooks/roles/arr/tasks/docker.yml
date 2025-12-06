@@ -24,6 +24,7 @@
       OPENVPN_USERNAME={{ openvpn_username }}
       OPENVPN_PASSWORD={{ openvpn_password }}
       TORRENT_PATH={{ torrent_dir }}
+      MAM_SESSION_ID={{ mam_id }}
 
 - name: create yml config file for soulseek
   copy:
@@ -33,6 +34,9 @@
     content: |
       remote_configuration: true
       headless: false # change this as soon as soularr works
+      permissions:
+        file:
+          mode: 644
       directories:
         incomplete: /downloads/incomplete
         downloads: /downloads/complete
@@ -51,7 +55,7 @@
           api_keys:
             soularr_api_key:
               key: {{ slskd_api_key }}
-              cidr: 129.168.178.0/24
+              #cidr: 129.168.178.0/24
       
 
 
@@ -64,11 +68,11 @@
       [Lidarr]
       api_key = {{ lidarr_api_key }}
       host_url = http://lidarr:8686
-      download_dir = {{ torrent_dir }}/complete
+      download_dir = /downloads/complete 
       disable_sync = False
       [Slskd]
       api_key = {{ slskd_api_key }}
-      host_url = http://slskd:5030
+      host_url = http://gluetun:5030
       url_base = /
       download_dir = /downloads
       delete_searches = False

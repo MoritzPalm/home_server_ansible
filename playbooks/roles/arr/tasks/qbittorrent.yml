@@ -1,0 +1,61 @@
+- set_fact:
+    qbittorrent_config_file: "{{ config_dir }}/qbittorrent/qBittorrent/qBittorrent.conf"
+
+- name: Ensure qBittorrent config dir exists
+  file:
+    path: "{{ config_dir }}/qbittorrent/qBittorrent"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0775"
+
+# 1) Patch config file on disk (this can run even before containers exist)
+
+- name: Ensure WebUI LocalHostAuth is disabled in [Preferences]
+  ini_file:
+    path: "{{ qbittorrent_config_file }}"
+    section: Preferences
+    option: "WebUI\\LocalHostAuth"
+    value: "false"
+    create: yes
+    mode: "0664"
+    owner: 1000
+    group: 1000
+  register: qbittorrent_localhostauth
+
+- name: Ensure WebUI CSRFProtection is disabled in [Preferences]
+  ini_file:
+    path: "{{ qbittorrent_config_file }}"
+    section: Preferences
+    option: "WebUI\\CSRFProtection"
+    value: "false"
+    create: yes
+    mode: "0664"
+    owner: 1000
+    group: 1000
+  register: qbittorrent_csrf
+
+# 2) If qbittorrent container exists and config changed, restart it once
+#    (safe to skip if container isn't created yet)
+
+- name: Check if qbittorrent container exists
+  community.docker.docker_container_info:
+    name: qbittorrent
+  register: qbittorrent_info
+  failed_when: false
+
+- block:
+    - name: Stop qbittorrent container
+      community.docker.docker_container:
+        name: qbittorrent
+        state: stopped
+
+    - name: Start qbittorrent container
+      community.docker.docker_container:
+        name: qbittorrent
+        state: started
+
+  when:
+    - qbittorrent_info.exists | default(false)
+    - qbittorrent_localhostauth.changed or qbittorrent_csrf.changed
+

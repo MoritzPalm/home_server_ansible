@@ -62,6 +62,7 @@
     state: directory
     owner: root
     group: docker
+    mode: "0775"
   loop:
     - "{{ torrent_dir }}"
     - "{{ torrent_dir }}/incomplete"
@@ -71,7 +72,7 @@
   ansible.builtin.file:
     path: "{{ torrent_dir }}"
     owner: "{{ admin_user }}"
-    group: "{{ admin_user }}"
+    group: docker
     mode: "0775"
     recurse: yes
 

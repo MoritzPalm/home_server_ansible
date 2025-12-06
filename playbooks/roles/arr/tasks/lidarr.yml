@@ -10,21 +10,12 @@
 
 - name: Get Lidarr root folders
   uri:
-    url: "http://{{ ansible_ssh_host }}/api/v1/rootfolder"
+    url: "http://{{ ansible_ssh_host }}:8686/api/v1/rootfolder"
     method: GET
     headers:
       X-Api-Key: "{{ lidarr_api_key }}"
     return_content: true
   register: lidarr_root_folders
-
-- name: Extract Lidarr root folder paths
-  set_fact:
-    lidarr_root_folder_paths: >-
-      {{
-        (lidarr_root_folders.json
-        | map(attribute='path')
-        | list }}
-
 
 - name: Build Lidarr root folder
   set_fact:
@@ -39,9 +30,13 @@
 
 
 - name: Create Lidarr root folder if it does not exists with this path
-  when: (lidarr_root_folders|selectattr('path', 'contains', '/data/music')
+  when: >
+    (lidarr_root_folders.json
+    |selectattr('path', 'contains', '/data/music')
+    |list
+    | length) == 0
   uri:
-    url: "http://{{ ansible_ssh_host }}/api/v1/rootfolder"
+    url: "http://{{ ansible_ssh_host }}:8686/api/v1/rootfolder"
     method: POST
     headers:
       X-Api-Key: "{{ lidarr_api_key }}"
