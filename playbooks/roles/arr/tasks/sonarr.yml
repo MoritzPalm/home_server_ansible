@@ -1,0 +1,41 @@
+- name: wait for Sonarr to be up
+  uri:
+    url: "http://{{ ansible_ssh_host }}:8989/sonarr/ping"
+    method: GET
+    status_code: 200
+  register: sonarr_ping
+  retries: 30
+  delay: 2
+  until: sonarr_ping.status == 200
+
+- name: Get Sonarr root folders
+  uri:
+    url: "http://{{ ansible_ssh_host }}:8989/api/v3/rootfolder"
+    method: GET
+    headers:
+      X-Api-Key: "{{ sonarr_api_key }}"
+    return_content: true
+  register: sonarr_root_folders
+
+- name: Build Sonarr root folder
+  set_fact:
+    sonarr_root_folder_body:
+      path: "/data/tv"
+
+
+- name: Create Sonarr root folder if it does not exists with this path
+  when: >
+    (sonarr_root_folders.json
+    |selectattr('path', 'contains', '/data/tv')
+    |list
+    | length) == 0
+  uri:
+    url: "http://{{ ansible_ssh_host }}:8989/api/v3/rootfolder"
+    method: POST
+    headers:
+      X-Api-Key: "{{ sonarr_api_key }}"
+    body_format: json
+    body: "{{ sonarr_root_folder_body }}"
+    status_code: [200, 201]
+    return_content: true
+  register: sonarr_rootfolder_create
