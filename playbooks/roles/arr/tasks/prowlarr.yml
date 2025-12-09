@@ -53,7 +53,7 @@
       syncLevel: "fullSync"
       fields:
         - name: "prowlarrUrl"
-          value: "http://prowlarr:9696"
+          value: "http://gluetun:9696"
         - name: "baseUrl"
           value: "http://sonarr:8989"
         - name: "apiKey"
@@ -69,7 +69,7 @@
       syncLevel: "fullSync"
       fields:
         - name: "prowlarrUrl"
-          value: "http://prowlarr:9696"
+          value: "http://gluetun:9696"
         - name: "baseUrl"
           value: "http://radarr:7878"
         - name: "apiKey"
@@ -215,3 +215,120 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_qbittorrent_create
+
+
+# adding indexers
+- name: Get list of indexers already present
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer"
+    method: GET
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    return_content: true
+  register: prowlarr_indexers
+
+- name: build 1337x indexer body
+  set_fact:
+    prowlarr_1337x_body:
+      definitionName: "1337x"
+      name: "1337x"
+      enable: true
+      redirect: false
+      implementation: "Cardigann"
+      configContract: "CardigannSettings"
+      priority: 50
+      appProfileId: 1
+      fields:
+        - name: definitionFile
+          value: "1337x"
+
+- name: build EZTV indexer body
+  set_fact:
+    prowlarr_eztv_body:
+      definitionName: "eztv"
+      name: "EZTV"
+      enable: true
+      redirect: false
+      implementation: "Cardigann"
+      configContract: "CardigannSettings"
+      priority: 50
+      appProfileId: 1
+      fields:
+        - name: definitionFile
+          value: "eztv"
+
+- name: build MyAnonamouse Indexer body
+  set_fact:
+    prowlarr_mam_body:
+      definitionName: "MyAnonamouse"
+      name: "MyAnonamouse Freeleech"
+      enable: true
+      redirect: false
+      implementation: "MyAnonamouse"
+      configContract: "MyAnonamouseSettings"
+      priority: 1
+      appProfileId: 1
+      fields:
+        - name: "mamId"
+          value: "{{ mam_id }}"
+        - name: "searchType"
+          value: "Freeleech"
+
+- name: Create 1337x Indexer if it does not exist
+  when: >
+    (prowlarr_indexers.json 
+    | selectattr('definitionName', 'contains', '1337x') 
+    | list 
+    | length) == 0
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer"
+    method: POST
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_1337x_body }}"
+    status_code: [200, 201]
+    return_content: true
+  register: prowlarr_1337x_create
+
+- name: Create EZTV Indexer if it does not exists
+  when: >
+    (prowlarr_indexers.json 
+    | selectattr('definitionName', 'contains', 'eztv') 
+    | list 
+    | length) == 0
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer"
+    method: POST
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_eztv_body }}"
+    status_code: [200, 201]
+    return_content: true
+  register: prowlarr_eztv_create 
+
+- name: Create MyAnonamouse Freeleech Indexer if it does not exist
+  when: >
+    (prowlarr_indexers.json 
+    | selectattr('definitionName', 'contains', 'MyAnonamouse') 
+    | list 
+    | length) == 0
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer"
+    method: POST
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_mam_body }}"
+    status_code: [200, 201]
+    return_content: true
+  register: prowlarr_mam_create
+
+
+
+
+
+
+
+

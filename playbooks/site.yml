@@ -7,3 +7,4 @@
     - geerlingguy.docker
     - docker
     - arr
+# TODO: reverse putting all arrs behind vpn but make a docker network for them
