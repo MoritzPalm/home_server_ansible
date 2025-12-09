@@ -274,6 +274,29 @@
         - name: "searchType"
           value: "Freeleech"
 
+
+- name: build Torrentleech Indexer body
+  set_fact:
+    prowlarr_torrentleech_body:
+      definitionName: "torrentleech"
+      name: "TorrentLeech Freeleech"
+      enable: true
+      redirect: false
+      implementation: "Cardigann"
+      configContract: "CardigannSettings"
+      priority: 1
+      appProfileId: 1
+      fields:
+        - name: definitionFile
+          value: "torrentleech"
+        - name: username
+          value: "{{ torrentleech_username }}"
+        - name: password
+          value: "{{ torrentleech_password }}"
+        - name: freeleech
+          value: true
+
+
 - name: Create 1337x Indexer if it does not exist
   when: >
     (prowlarr_indexers.json 
@@ -326,8 +349,22 @@
   register: prowlarr_mam_create
 
 
-
-
+- name: Create TorrentLeech Freeleech Indexer if it does not exist
+  when: >
+    (prowlarr_indexers.json 
+    | selectattr('definitionName', 'contains', 'torrentleech') 
+    | list 
+    | length) == 0
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer"
+    method: POST
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_torrentleech_body }}"
+    status_code: [200, 201]
+    return_content: true
+  register: prowlarr_torrentleech_create
 
 
 
