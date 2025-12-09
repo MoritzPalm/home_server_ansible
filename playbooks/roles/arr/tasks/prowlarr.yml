@@ -89,6 +89,7 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_sonarr_create
+  ignore_errors: yes
 
 - name: Create Radarr app in Prowlarr if it does not exist
   when: prowlarr_radarr_id == ''
@@ -102,6 +103,7 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_radarr_create
+  ignore_errors: yes
 
 # update if existing 
 
@@ -127,6 +129,7 @@
     status_code: [200, 202]
     return_content: true
   register: prowlarr_sonarr_update
+  ignore_errors: yes
 
 - name: Update existing Radarr app in Prowlarr
   when: prowlarr_radarr_id != ''
@@ -140,6 +143,7 @@
     status_code: [200, 201, 202]
     return_content: true
   register: prowlarr_radarr_update
+  ignore_errors: yes
 
 
 - name: Get existing download clients (if any)
@@ -215,6 +219,7 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_qbittorrent_create
+  ignore_errors: yes
 
 
 # adding indexers
@@ -226,6 +231,46 @@
       X-Api-Key: "{{ prowlarr_api_key }}"
     return_content: true
   register: prowlarr_indexers
+
+- name: Extract existing indexer IDs
+  set_fact:
+    prowlarr_1337x_id: >-
+      {{
+        (prowlarr_indexers.json
+         | selectattr('definitionName', 'contains', '1337x')
+         | map(attribute='id')
+         | list
+         | first)
+        | default('', true)
+      }}
+    prowlarr_eztv_id: >-
+      {{
+        (prowlarr_indexers.json
+         | selectattr('definitionName', 'contains', 'eztv')
+         | map(attribute='id')
+         | list
+         | first)
+        | default('', true)
+      }}
+    prowlarr_mam_id_existing: >-
+      {{
+        (prowlarr_indexers.json
+         | selectattr('definitionName', 'contains', 'MyAnonamouse')
+         | map(attribute='id')
+         | list
+         | first)
+        | default('', true)
+      }}
+    prowlarr_torrentleech_id: >-
+      {{
+        (prowlarr_indexers.json
+         | selectattr('definitionName', 'contains', 'torrentleech')
+         | map(attribute='id')
+         | list
+         | first)
+        | default('', true)
+      }}
+
 
 - name: build 1337x indexer body
   set_fact:
@@ -297,6 +342,26 @@
           value: true
 
 
+- name: Build 1337x body with ID for update
+  when: prowlarr_1337x_id != ''
+  set_fact:
+    prowlarr_1337x_body_update: "{{ prowlarr_1337x_body | combine({'id': prowlarr_1337x_id}) }}"
+
+- name: Build EZTV body with ID for update
+  when: prowlarr_eztv_id != ''
+  set_fact:
+    prowlarr_eztv_body_update: "{{ prowlarr_eztv_body | combine({'id': prowlarr_eztv_id}) }}"
+
+- name: Build MyAnonamouse body with ID for update
+  when: prowlarr_mam_id_existing != ''
+  set_fact:
+    prowlarr_mam_body_update: "{{ prowlarr_mam_body | combine({'id': prowlarr_mam_id_existing}) }}"
+
+- name: Build TorrentLeech body with ID for update
+  when: prowlarr_torrentleech_id != ''
+  set_fact:
+    prowlarr_torrentleech_body_update: "{{ prowlarr_torrentleech_body | combine({'id': prowlarr_torrentleech_id}) }}"
+
 - name: Create 1337x Indexer if it does not exist
   when: >
     (prowlarr_indexers.json 
@@ -313,6 +378,7 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_1337x_create
+  ignore_errors: yes
 
 - name: Create EZTV Indexer if it does not exists
   when: >
@@ -330,6 +396,7 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_eztv_create 
+  ignore_errors: yes
 
 - name: Create MyAnonamouse Freeleech Indexer if it does not exist
   when: >
@@ -347,6 +414,7 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_mam_create
+  ignore_errors: yes
 
 
 - name: Create TorrentLeech Freeleech Indexer if it does not exist
@@ -365,6 +433,64 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_torrentleech_create
+  ignore_errors: yes
+
+
+- name: Update existing 1337x Indexer if config should be enforced
+  when: prowlarr_1337x_id != ''
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer/{{ prowlarr_1337x_id }}"
+    method: PUT
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_1337x_body_update }}"
+    status_code: [200, 202]
+    return_content: true
+  register: prowlarr_1337x_update
+  ignore_errors: yes
+
+- name: Update existing EZTV Indexer if config should be enforced
+  when: prowlarr_eztv_id != ''
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer/{{ prowlarr_eztv_id }}"
+    method: PUT
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_eztv_body_update }}"
+    status_code: [200, 202]
+    return_content: true
+  register: prowlarr_eztv_update
+  ignore_errors: yes
+
+- name: Update existing MyAnonamouse Indexer if config should be enforced
+  when: prowlarr_mam_id_existing != ''
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer/{{ prowlarr_mam_id_existing }}"
+    method: PUT
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_mam_body_update }}"
+    status_code: [200, 202]
+    return_content: true
+  register: prowlarr_mam_update
+  ignore_errors: yes
+
+- name: Update existing TorrentLeech Indexer if config should be enforced
+  when: prowlarr_torrentleech_id != ''
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer/{{ prowlarr_torrentleech_id }}"
+    method: PUT
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_torrentleech_body_update }}"
+    status_code: [200, 202]
+    return_content: true
+  register: prowlarr_torrentleech_update
+  ignore_errors: yes
 
 
 
