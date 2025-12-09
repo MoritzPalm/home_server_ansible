@@ -13,6 +13,12 @@
       src: "{{ config_dir }}/prowlarr/config.xml"
   register: prowlarr_config
 
+- name: Read Whisparr config
+  slurp:
+    src: "{{ config_dir }}/whisparr/config.xml"
+  register: whisparr_config
+
+
 - name: Extract Radarr API Key from config.xml
   set_fact:
     radarr_api_key: >-
@@ -40,6 +46,15 @@
         | regex_replace('^<ApiKey>([^<]+)</ApiKey>$', '\1')
       }}
 
+- name: Extract Whisparr API Key from config.xml
+  set_fact:
+    whisparr_api_key: >-
+      {{
+        (whisparr_config.content | b64decode)
+        | regex_search('<ApiKey>[^<]+</ApiKey>')
+        | regex_replace('^<ApiKey>([^<]+)</ApiKey>$', '\1')
+      }}
+
 - name: Ensure API keys were found
   assert:
     that:
@@ -49,7 +64,9 @@
       - sonarr_api_key | length > 0
       - prowlarr_api_key is defined
       - prowlarr_api_key | length > 0
-    fail_msg: "Could not extract Radarr, Sonarr or Prowlarr API key from config.xml"
+      - whisparr_api_key is defined
+      - whisparr_api_key | length > 0
+    fail_msg: "Could not extract API key from config.xml"
 
 - name: Wait for Prowlarr to be up
   uri:
@@ -92,11 +109,16 @@
          | first)
         | default('', true)
       }}
+    prowlarr_whisparr_id: >-
+      {{
+        (prowlarr_apps.json
+         | selectattr('implementation', 'equalto', 'Whisparr')
+         | map(attribute='id')
+         | list
+         | first)
+        | default('', true)
+      }}
 
-
-- name: debug sonarr api key
-  debug:
-    var: sonarr_api_key 
 
 
 # desired config bodies (without id) 
@@ -133,6 +155,22 @@
         - name: "apiKey"
           value: "{{ radarr_api_key }}"
 
+- name: Build Whisparr application body
+  set_fact:
+    prowlarr_whisparr_body:
+      name: "Whisparr"
+      implementation: "Whisparr"
+      configContract: "WhisparrSettings"
+      enable: true
+      syncLevel: "fullSync"
+      fields:
+        - name: "prowlarrUrl"
+          value: "http://gluetun:9696"
+        - name: "baseUrl"
+          value: "http://whisparr:6969"
+        - name: "apiKey"
+          value: "{{ whisparr_api_key }}"
+
 # create if missing 
 
 
@@ -164,6 +202,20 @@
   register: prowlarr_radarr_create
   ignore_errors: yes
 
+- name: Create Whisparr app in Prowlarr if it does not exist
+  when: prowlarr_whisparr_id == ''
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/applications"
+    method: POST
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_whisparr_body }}"
+    status_code: [200, 201]
+    return_content: yes
+  register: prowlarr_whisparr_create
+  ignore_errors: true
+
 # update if existing 
 
 - name: Build Sonarr body with ID for update
@@ -175,6 +227,11 @@
   when: prowlarr_radarr_id != ''
   set_fact:
     prowlarr_radarr_body_update: "{{ prowlarr_radarr_body | combine({'id': prowlarr_radarr_id}) }}"
+
+- name: Build Whisparr body with ID for update
+  when: prowlarr_whisparr_id != ''
+  set_fact:
+    prowlarr_whisparr_body_update: "{{ prowlarr_whisparr_body | combine({'id': prowlarr_whisparr_id}) }}"
 
 - name: Update existing Sonarr app in Prowlarr
   when: prowlarr_sonarr_id != ''
@@ -202,6 +259,20 @@
     status_code: [200, 201, 202]
     return_content: true
   register: prowlarr_radarr_update
+  ignore_errors: yes
+
+- name: Update existing Whisparr app in Prowlarr
+  when: prowlarr_whisparr_id != ''
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/applications/{{ prowlarr_whisparr_id }}"
+    method: PUT
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_whisparr_body_update }}"
+    status_code: [200, 201]
+    return_content: true
+  register: prowlarr_whisparr_update
   ignore_errors: yes
 
 
