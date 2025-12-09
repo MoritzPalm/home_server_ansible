@@ -1,3 +1,56 @@
+- name: Read Radarr config
+  slurp:
+    src: "{{ config_dir }}/radarr/config.xml"
+  register: radarr_config
+
+- name: Read Sonarr config
+  slurp:
+    src: "{{ config_dir }}/sonarr/config.xml"
+  register: sonarr_config
+
+- name: Read Prowlarr config
+  slurp:
+      src: "{{ config_dir }}/prowlarr/config.xml"
+  register: prowlarr_config
+
+- name: Extract Radarr API Key from config.xml
+  set_fact:
+    radarr_api_key: >-
+      {{
+        (radarr_config.content | b64decode)
+        | regex_search('<ApiKey>[^<]+</ApiKey>')
+        | regex_replace('^<ApiKey>([^<]+)</ApiKey>$', '\1')
+      }}
+
+- name: Extract Sonarr API Key from config.xml
+  set_fact:
+    sonarr_api_key: >-
+      {{
+        (sonarr_config.content | b64decode)
+        | regex_search('<ApiKey>[^<]+</ApiKey>')
+        | regex_replace('^<ApiKey>([^<]+)</ApiKey>$', '\1')
+      }}
+
+- name: Extract Prowlarr API Key from config.xml
+  set_fact:
+    prowlarr_api_key: >-
+      {{
+        (prowlarr_config.content | b64decode)
+        | regex_search('<ApiKey>[^<]+</ApiKey>')
+        | regex_replace('^<ApiKey>([^<]+)</ApiKey>$', '\1')
+      }}
+
+- name: Ensure API keys were found
+  assert:
+    that:
+      - radarr_api_key is defined
+      - radarr_api_key | length > 0
+      - sonarr_api_key is defined
+      - sonarr_api_key | length > 0
+      - prowlarr_api_key is defined
+      - prowlarr_api_key | length > 0
+    fail_msg: "Could not extract Radarr, Sonarr or Prowlarr API key from config.xml"
+
 - name: Wait for Prowlarr to be up
   uri:
     url: "http://{{ ansible_ssh_host }}:9696/prowlarr/ping"
@@ -41,6 +94,11 @@
       }}
 
 
+- name: debug sonarr api key
+  debug:
+    var: sonarr_api_key 
+
+
 # desired config bodies (without id) 
 
 - name: Build Sonarr application body
@@ -76,6 +134,7 @@
           value: "{{ radarr_api_key }}"
 
 # create if missing 
+
 
 - name: Create Sonarr app in Prowlarr if it does not exist
   when: prowlarr_sonarr_id == ''
