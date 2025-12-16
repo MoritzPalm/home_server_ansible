@@ -21,6 +21,7 @@
     content: |
       CONFIG_DIR={{ config_dir }}
       MEDIA_PATH={{ media_path }}
+      STORAGE_DIR={{ storage_dir }}
       OPENVPN_USERNAME={{ openvpn_username }}
       OPENVPN_PASSWORD={{ openvpn_password }}
       TORRENT_PATH={{ torrent_dir }}

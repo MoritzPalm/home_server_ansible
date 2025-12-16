@@ -41,3 +41,7 @@
   changed_when: ts_up.rc == 0
   failed_when: ts_up.rc != 0
 #  no_log: true
+
+
+- name: run tailscale funnel for overseer
+  ansible.builtin.command: tailscale funnel --yes --bg 5055

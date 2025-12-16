@@ -1,61 +1,66 @@
-- set_fact:
-    qbittorrent_config_file: "{{ config_dir }}/qbittorrent/qBittorrent/qBittorrent.conf"
+- name: qBittorrent Configuration Block
+  block:
+    - name: Set qBittorrent variable facts
+      set_fact:
+        qbittorrent_config_file: "{{ config_dir }}/qbittorrent/qBittorrent/qBittorrent.conf"
+        qbt_settings: 
+          - { section: "BitTorrent", option: "Session\\SavePath", value: "/data/torrents/" }
+          - { section: "BitTorrent", option: "Session\\TempPath", value: "/data/torrents/incomplete/" }
+          - { section: "BitTorrent", option: "Session\\TempPathEnabled", value: "true" }
+          - { section: "BitTorrent", option: "Session\\LSDEnabled", value: "false" }
+          - { section: "BitTorrent", option: "Session\\PeXEnabled", value: "false" }
+          - { section: "BitTorrent", option: "Session\\DHTEnabled", value: "false" }
+          - { section: "Preferences", option: "WebUI\\LocalHostAuth", value: "false" }
+          - { section: "Preferences", option: "WebUI\\CSRFProtection", value: "false" }
 
-- name: Ensure qBittorrent config dir exists
-  file:
-    path: "{{ config_dir }}/qbittorrent/qBittorrent"
-    state: directory
-    owner: 1000
-    group: 1000
-    mode: "0775"
+    - name: Ensure qBittorrent config dir exists
+      file:
+        path: "{{ config_dir }}/qbittorrent/qBittorrent"
+        state: directory
+        owner: 1000
+        group: 1000
+        mode: "0775"
 
-# 1) Patch config file on disk (this can run even before containers exist)
+    - name: Check if qBittorrent config requires updates
+      community.general.ini_file:
+        path: "{{ qbittorrent_config_file }}"
+        section: "{{ item.section }}"
+        option: "{{ item.option }}"
+        value: "{{ item.value }}"
+        create: yes
+      loop: "{{ qbt_settings }}"
+      check_mode: yes
+      register: qbit_config_check
 
-- name: Ensure WebUI LocalHostAuth is disabled in [Preferences]
-  ini_file:
-    path: "{{ qbittorrent_config_file }}"
-    section: Preferences
-    option: "WebUI\\LocalHostAuth"
-    value: "false"
-    create: yes
-    mode: "0664"
-    owner: 1000
-    group: 1000
-  register: qbittorrent_localhostauth
+    - name: Apply changes if required
+      block:
+        - name: Check qbittorrent container status
+          community.docker.docker_container_info:
+            name: qbittorrent
+          register: qbittorrent_info
 
-- name: Ensure WebUI CSRFProtection is disabled in [Preferences]
-  ini_file:
-    path: "{{ qbittorrent_config_file }}"
-    section: Preferences
-    option: "WebUI\\CSRFProtection"
-    value: "false"
-    create: yes
-    mode: "0664"
-    owner: 1000
-    group: 1000
-  register: qbittorrent_csrf
+        - name: Stop qbittorrent to prevent config overwrite
+          community.docker.docker_container:
+            name: qbittorrent
+            state: stopped
+          when: qbittorrent_info.exists and qbittorrent_info.container.State.Running
 
-# 2) If qbittorrent container exists and config changed, restart it once
-#    (safe to skip if container isn't created yet)
+        - name: Apply qBittorrent Settings
+          community.general.ini_file:
+            path: "{{ qbittorrent_config_file }}"
+            section: "{{ item.section }}"
+            option: "{{ item.option }}"
+            value: "{{ item.value }}"
+            create: yes
+            mode: "0664"
+            owner: 1000
+            group: 1000
+          loop: "{{ qbt_settings }}"
 
-- name: Check if qbittorrent container exists
-  community.docker.docker_container_info:
-    name: qbittorrent
-  register: qbittorrent_info
-  failed_when: false
+        - name: Start qbittorrent container
+          community.docker.docker_container:
+            name: qbittorrent
+            state: started
+          when: qbittorrent_info.exists
 
-- block:
-    - name: Stop qbittorrent container
-      community.docker.docker_container:
-        name: qbittorrent
-        state: stopped
-
-    - name: Start qbittorrent container
-      community.docker.docker_container:
-        name: qbittorrent
-        state: started
-
-  when:
-    - qbittorrent_info.exists | default(false)
-    - qbittorrent_localhostauth.changed or qbittorrent_csrf.changed
-
+      when: qbit_config_check.changed

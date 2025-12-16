@@ -28,3 +28,15 @@
     - arr
     - arr-sonarr
 
+- name: Configure Radarr
+  import_tasks: radarr.yml
+  tags:
+    - arr
+    - arr-sonarr
+
+- name: Configure Overseerr
+  import_tasks: overseerr.yml
+  tags:
+    - arr
+    - arr-overseerr
+

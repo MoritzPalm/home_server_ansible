@@ -3,7 +3,7 @@
 
 - name: Base packages present
   apt:
-    name: [ca-certificates, curl, gnupg, ufw, fail2ban, unattended-upgrades, tmux, htop, git]
+    name: [ca-certificates, curl, gnupg, ufw, fail2ban, unattended-upgrades, tmux, htop, git, tree, plocate]
     state: present
     update_cache: true
 

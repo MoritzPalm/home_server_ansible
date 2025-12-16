@@ -242,7 +242,7 @@
       X-Api-Key: "{{ prowlarr_api_key }}"
     body_format: json
     body: "{{ prowlarr_sonarr_body_update }}"
-    status_code: [200, 202]
+    status_code: [200, 201, 202]
     return_content: true
   register: prowlarr_sonarr_update
   ignore_errors: yes
@@ -270,7 +270,7 @@
       X-Api-Key: "{{ prowlarr_api_key }}"
     body_format: json
     body: "{{ prowlarr_whisparr_body_update }}"
-    status_code: [200, 201]
+    status_code: [200, 201, 202]
     return_content: true
   register: prowlarr_whisparr_update
   ignore_errors: yes
