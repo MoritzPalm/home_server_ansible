@@ -18,17 +18,11 @@
     overseerr_config: >-
       {{ overseerr_config_raw.content | b64decode | from_json }}
 
-- name: debug overseer config
-  debug:
-    var: overseerr_config
 
 - name: Extract Overseer API Key
   set_fact:
     overseerr_api_key: "{{ overseerr_config.main.apiKey}}"
 
-- name: debug api key
-  debug:
-    var: overseerr_api_key
 
 - name: Login via Plex Token
   uri:

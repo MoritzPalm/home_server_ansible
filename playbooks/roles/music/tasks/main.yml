@@ -1,0 +1,27 @@
+- name: Create config dirs for apps
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: docker
+    mode: "0775"
+  loop:
+    - "{{ config_dir }}/beets"
+
+- name: Create .env file for music stack
+copy:
+    dest: "{{ compose_root }}/music/.env"
+    owner: root
+    group: docker
+    mode: "0640"
+    content: |
+      MEDIA_DIR={{ media_path }}
+      CONFIG_DIR={{ config_dir }}
+      TORRENT_DIR={{ torrent_dir }}
+
+- name: run music compose file
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_root }}/music"
+    files: music.yml
+
+    

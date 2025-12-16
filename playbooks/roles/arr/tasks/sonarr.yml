@@ -20,13 +20,13 @@
 - name: Build Sonarr root folder
   set_fact:
     sonarr_root_folder_body:
-      path: "/data/tv"
+      path: "/data/media/tv"
 
 
 - name: Create Sonarr root folder if it does not exists with this path
   when: >
     (sonarr_root_folders.json
-    |selectattr('path', 'contains', '/data/tv')
+    |selectattr('path', 'contains', '/data/media/tv')
     |list
     | length) == 0
   uri:
@@ -39,3 +39,63 @@
     status_code: [200, 201]
     return_content: true
   register: sonarr_rootfolder_create
+
+
+- name: Get existing download clients
+  uri:
+    url: "http://{{ ansible_ssh_host }}:8989/api/v3/downloadclient"
+    method: GET
+    headers:
+      X-Api-Key: "{{ sonarr_api_key }}"
+    return_content: true
+  register: radarr_downloadclients
+
+- name: Extract Downloadclient IDs
+  set_fact:
+    radarr_downloadclient_id_list: >-
+      {{ radarr_downloadclients.json
+        | map(attribute='id')
+        | list }}
+
+- name: Build qbittorrent application body
+  set_fact:
+    radarr_qbittorrent_body:
+      name: "qBittorrent"
+      enable: true
+      protocol: "torrent"
+      priority: 1
+      removeCompletedDownloads: false
+      removeFailedDownloads: true
+      fields:
+        - name: "host"
+          value: "gluetun"
+        - name: "port"
+          value: 8088
+        - name: "useSsl"
+          value: false
+        - name: "username"
+          value: "{{ qbittorrent_username }}"
+        - name: "password"
+          value: "{{ qbittorrent_password }}"
+      implementationName: "qBittorrent"
+      implementation: "QBittorrent"
+      configContract: "QBittorrentSettings"
+
+- name: Create qbittorrent download client if missing
+  when: >
+    (radarr_downloadclients.json
+      | selectattr('implementation', 'equalto', 'QBittorrent')
+      | list
+      | length) == 0
+  uri:
+    url: "http://{{ ansible_ssh_host }}:8989/api/v3/downloadclient"
+    method: POST
+    headers:
+      X-Api-Key: "{{ sonarr_api_key }}"
+    body_format: json
+    body: "{{ radarr_qbittorrent_body }}"
+    status_code: [200, 201]
+    return_content: true
+  register: radarr_qbittorrent_create
+  ignore_errors: yes
+
