@@ -1,3 +1,14 @@
+- name: add compose root to git safe directories
+  ansible.builtin.command:
+    cmd: git config --global --add safe.directory '{{ item }}'
+  become: true
+  changed_when: false
+  loop:
+    - "{{ compose_root }}"
+    - "{{ config_dir }}"
+  tags:
+    - docker
+
 - name: clone repository containing compose files
   ansible.builtin.git:
     repo: 'https://github.com/MoritzPalm/home_server_compose.git'
@@ -8,8 +19,6 @@
     force: true
   tags:
     - docker
-    - arr
-    - media
 
 - name: create admin password file for portainer
   copy:
@@ -26,6 +35,21 @@
     content: |
       ADMIN_PASSWORD_FILE={{ compose_root }}/portainer/admin_password.txt
       PORTAINER_LICENSE_KEY={{ portainer_license_key }}
+
+- name: Create shared Docker network for media services
+  community.docker.docker_network:
+    name: media_network
+    state: present
+  tags:
+    - docker
+    - networking
+- name: Create shared Docker network for media services
+  community.docker.docker_network:
+    name: media_network
+    state: present
+  tags:
+    - docker
+    - networking
 
 - name: run portainer docker compose file
   community.docker.docker_compose_v2:

@@ -26,6 +26,8 @@
       OPENVPN_PASSWORD={{ openvpn_password }}
       TORRENT_PATH={{ torrent_dir }}
       MAM_SESSION_ID={{ mam_id }}
+      ABR_USERNAME={{ abr_username }}
+      ABR_PASSWORD={{ abr_password }}
 
 - name: create yml config file for soulseek
   copy:
@@ -39,8 +41,7 @@
         file:
           mode: 644
       directories:
-        incomplete: /downloads/incomplete
-        downloads: /downloads/complete
+        downloads: /downloads
       remote_file_management: true
       shares:
         directories:

@@ -1,0 +1,53 @@
+{
+  "active_media_server": "{{ soulsync_media_server | default('plex') }}",
+  "spotify": {
+    "client_id": "{{ spotify_client_id }}",
+    "client_secret": "{{ spotify_client_secret }}",
+    "redirect_uri": "http://127.0.0.1:8888/callback"
+  },
+{% if soulsync_tidal_client_id is defined and soulsync_tidal_client_id %}
+  "tidal": {
+    "client_id": "{{ soulsync_tidal_client_id }}",
+    "client_secret": "{{ soulsync_tidal_client_secret }}",
+    "redirect_uri": "http://{{ ansible_host }}:8889/tidal/callback"
+  },
+{% endif %}
+  "plex": {
+    "base_url": "http://plex:32400",
+    "token": "{{ plex_token }}",
+    "auto_detect": true
+  },
+  "soulseek": {
+    "slskd_url": "http://gluetun:5030",
+    "api_key": "{{ slskd_api_key }}",
+    "download_path": "/downloads",
+    "transfer_path": "/data/media/music"
+  },
+  "logging": {
+    "path": "logs/app.log",
+    "level": "INFO"
+  },
+  "database": {
+    "path": "database/music_library.db",
+    "max_workers": 5
+  },
+  "metadata_enhancement": {
+    "enabled": true,
+    "embed_album_art": true
+  },
+  "file_organization": {
+    "enabled": true,
+    "templates": {
+      "album_path": "$albumartist/$albumartist - $album/$track - $title",
+      "single_path": "$artist/$artist - $title/$title",
+      "compilation_path": "Compilations/$album/$track - $artist - $title",
+      "playlist_path": "$playlist/$artist - $title"
+    }
+  },
+  "playlist_sync": {
+    "create_backup": true
+  },
+  "listenbrainz": {
+    "token": "{{ listenbrainz_token | default('') }}"
+  }
+}

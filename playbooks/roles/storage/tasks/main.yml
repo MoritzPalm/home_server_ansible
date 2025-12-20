@@ -60,7 +60,7 @@
   file: 
     path: "{{ item }}"
     state: directory
-    owner: root
+    owner: "{{ admin_user }}" 
     group: docker
     mode: "0775"
   loop:
@@ -75,5 +75,14 @@
     group: docker
     mode: "0775"
     recurse: yes
+
+- name: set config dir to correct permissions
+  ansible.builtin.file:
+    path: "{{ config_dir }}"
+    owner: 1000
+    group: 1000
+    recurse: yes
+    state: directory
+  become: yes
 
 

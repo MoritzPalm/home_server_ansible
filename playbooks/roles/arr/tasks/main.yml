@@ -40,3 +40,9 @@
     - arr
     - arr-overseerr
 
+- name: Configure Bookshelf
+  import_tasks: bookshelf.yml
+  tags:
+    - arr
+    - arr-bookshelf
+

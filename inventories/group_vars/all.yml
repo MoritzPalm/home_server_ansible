@@ -8,6 +8,7 @@ cache_dir: /srv/data/cache
 media_path: /mnt/storage/media
 torrent_dir: /mnt/storage/torrents
 storage_dir: /mnt/storage
+log_dir: /srv/logs
 
 mergerfs_default_opts: "direct_io,defaults,allow_other,minfreespace=50G,fsname=mergerfs,category.create=mfs,nonempty,dropcacheonclose=true,cache.files=auto-full,func.getattr=newest,moveonenospc=true"
 
@@ -16,9 +17,12 @@ ssd_dirs:
   - "/srv/data/configs"
   - "/srv/data/db"
   - "/srv/data/cache"
+  - "/srv/logs"
 pool_dirs: 
   - "/media/storage/media"
   - "/media/storage/torrents"
   - "/media/storage/backups"
 
 tailscale_operator: "moritzpalm" 
+
+plex_url: "192.168.178.174:32401"

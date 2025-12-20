@@ -18,6 +18,11 @@
     src: "{{ config_dir }}/whisparr/config.xml"
   register: whisparr_config
 
+- name: Read Bookshelf config
+  slurp:
+    src: "{{ config_dir }}/bookshelf/config.xml"
+  register: bookshelf_config
+
 
 - name: Extract Radarr API Key from config.xml
   set_fact:
@@ -55,6 +60,15 @@
         | regex_replace('^<ApiKey>([^<]+)</ApiKey>$', '\1')
       }}
 
+- name: Extract Bookshelf API key from config.xml
+  set_fact:
+    bookshelf_api_key: >-
+      {{
+        (bookshelf_config.content | b64decode)
+        | regex_search('<ApiKey>[^<]+</ApiKey>')
+        | regex_replace('^<ApiKey>([^<]+)</ApiKey>$', '\1')
+      }}
+
 - name: Ensure API keys were found
   assert:
     that:
@@ -66,6 +80,8 @@
       - prowlarr_api_key | length > 0
       - whisparr_api_key is defined
       - whisparr_api_key | length > 0
+      - bookshelf_api_key is defined
+      - bookshelf_api_key | length > 0
     fail_msg: "Could not extract API key from config.xml"
 
 - name: Wait for Prowlarr to be up
@@ -116,6 +132,15 @@
          | map(attribute='id')
          | list
          | first)
+        | default('', true)
+      }}
+    prowlarr_bookshelf_id: >-
+      {{
+        (prowlarr_apps.json
+        | selectattr('implementation', 'equalto', 'Readarr')
+        | map(attribute='id')
+        | list
+        | first)
         | default('', true)
       }}
 
@@ -171,6 +196,22 @@
         - name: "apiKey"
           value: "{{ whisparr_api_key }}"
 
+- name: Build Bookshelf application body
+  set_fact:
+    prowlarr_bookshelf_body:
+      name: "Readarr"
+      implementation: "Readarr"
+      configContract: "ReadarrSettings"
+      enable: true
+      syncLevel: "fullSync"
+      fields:
+        - name: "prowlarrUrl"
+          value: "http://gluetun:9696"
+        - name: "baseUrl"
+          value: "http://bookshelf:8787"
+        - name: "apiKey"
+          value: "{{ bookshelf_api_key }}"
+
 # create if missing 
 
 
@@ -186,7 +227,7 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_sonarr_create
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Create Radarr app in Prowlarr if it does not exist
   when: prowlarr_radarr_id == ''
@@ -200,7 +241,7 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_radarr_create
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Create Whisparr app in Prowlarr if it does not exist
   when: prowlarr_whisparr_id == ''
@@ -212,9 +253,24 @@
     body_format: json
     body: "{{ prowlarr_whisparr_body }}"
     status_code: [200, 201]
-    return_content: yes
+    return_content: true
   register: prowlarr_whisparr_create
   ignore_errors: true
+
+- name: Create Bookshelf app in Prowlarr if it does not exist
+  when: prowlarr_bookshelf_id == ''
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/applications"
+    method: POST
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_bookshelf_body }}"
+    status_code: [200, 201]
+    return_content: true
+  register: prowlarr_bookshelf_create
+  ignore_errors: true
+
 
 # update if existing 
 
@@ -233,6 +289,11 @@
   set_fact:
     prowlarr_whisparr_body_update: "{{ prowlarr_whisparr_body | combine({'id': prowlarr_whisparr_id}) }}"
 
+- name: Build Bookshelf body with ID for update
+  when: prowlarr_bookshelf_id != ''
+  set_fact:
+    prowlarr_bookshelf_body_update: "{{ prowlarr_bookshelf_body | combine({'id': prowlarr_bookshelf_id}) }}"
+
 - name: Update existing Sonarr app in Prowlarr
   when: prowlarr_sonarr_id != ''
   uri:
@@ -245,7 +306,7 @@
     status_code: [200, 201, 202]
     return_content: true
   register: prowlarr_sonarr_update
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Update existing Radarr app in Prowlarr
   when: prowlarr_radarr_id != ''
@@ -259,7 +320,7 @@
     status_code: [200, 201, 202]
     return_content: true
   register: prowlarr_radarr_update
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Update existing Whisparr app in Prowlarr
   when: prowlarr_whisparr_id != ''
@@ -273,7 +334,21 @@
     status_code: [200, 201, 202]
     return_content: true
   register: prowlarr_whisparr_update
-  ignore_errors: yes
+  ignore_errors: true
+
+- name: Update existing Bookshelf app
+  when: prowlarr_bookshelf_id != ''
+  uri:
+    url: "http://{{ ansible_ssh_host }}:8787/api/v1/applications/{{ prowlarr_bookshelf_id }}"
+    method: PUT
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_bookshelf_body_update }}"
+    status_code: [200, 201, 202]
+    return_content: true
+  register: prowlarr_bookshelf_update
+  ignore_errors: true
 
 
 - name: Get existing download clients (if any)
@@ -459,7 +534,7 @@
       redirect: false
       implementation: "Cardigann"
       configContract: "CardigannSettings"
-      priority: 1
+      priority: 2
       appProfileId: 1
       fields:
         - name: definitionFile
