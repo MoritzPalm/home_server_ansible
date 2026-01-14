@@ -1,0 +1,81 @@
+{% raw %}
+groups:
+  - name: host_alerts
+    interval: 30s
+    rules:  
+      # Host CPU usage
+      - alert: HostHighCpuLoad
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host CPU usage is high ({{ $value }}%)"
+          description: "Host {{ $labels.instance }} CPU usage is above 80%"
+      
+      # Host memory usage
+      - alert: HostOutOfMemory
+        expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 10
+        for:   5m
+        labels:  
+          severity: warning
+        annotations:
+          summary:   "Host memory is running low ({{ $value }}% available)"
+          description: "Host {{ $labels.instance }} has less than 10% memory available"
+      
+      # Host disk space
+      - alert: HostOutOfDiskSpace
+        expr:  (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for:  5m
+        labels: 
+          severity: critical
+        annotations:
+          summary:   "Host disk space is low ({{ $value }}% available)"
+          description: "Host {{ $labels.instance }} root filesystem has less than 10% space available"
+  
+  - name: container_alerts
+    interval: 30s
+    rules:
+      # Container high CPU
+      - alert: ContainerHighCpuUsage
+        expr:  rate(container_cpu_usage_seconds_total{name!=""}[5m]) * 100 > 80
+        for:   5m
+        labels:  
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} CPU usage is high"
+          description: "Container {{ $labels.name }} is using {{ $value }}% CPU"
+      
+      # Container high memory
+      - alert: ContainerHighMemoryUsage
+        expr:  (container_memory_usage_bytes{name!=""} / container_spec_memory_limit_bytes{name!=""}) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations: 
+          summary: "Container {{ $labels.name }} memory usage is high"
+          description: "Container {{ $labels.name }} is using {{ $value }}% of its memory limit"
+      
+      # Container down
+      - alert: ContainerDown
+        expr: time() - container_last_seen{name!=""} > 60
+        for:   2m
+        labels: 
+          severity: critical
+        annotations: 
+          summary: "Container {{ $labels.name }} is down"
+          description: "Container {{ $labels.name }} has been down for more than 2 minutes"
+  
+  - name: disk_alerts
+    interval: 60s
+    rules:
+      # SMART disk failure prediction
+      - alert: SmartDiskFailurePredicted
+        expr: smartctl_device_smart_healthy == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations: 
+          summary:  "SMART predicts disk failure on {{ $labels.device }}"
+          description: "Disk {{ $labels.device }} is showing signs of failure"
+{% endraw %}

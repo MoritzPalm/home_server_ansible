@@ -1,0 +1,74 @@
+- name: Clone Hevy Insights repository
+  ansible.builtin.git:
+    repo: "{{ repo_url }}"
+    dest: "{{ app_dir }}"
+    version:  main
+    force: yes
+  tags:
+    - hevy
+    - hevy-build
+
+- name: Build backend Docker image
+  community.docker.docker_image:
+    name: casudo/hevy-insights-backend
+    tag: latest
+    source:  build
+    build: 
+      path: "{{ app_dir }}"
+      dockerfile: backend/Dockerfile_backend
+    state: present
+  tags:
+    - hevy
+    - hevy-build
+
+- name: Build frontend Docker image
+  community.docker.docker_image:
+    name: casudo/hevy-insights-frontend
+    tag: latest
+    source:  build
+    build: 
+      path: "{{ app_dir }}"
+      dockerfile: frontend/Dockerfile_frontend
+    state: present
+  tags:
+    - hevy
+    - hevy-build
+
+- name: Update backend image in fitness.yml
+  ansible.builtin.lineinfile:
+    path: "{{ compose_file }}"
+    regexp: '^\s+image:\s+.*hevy-insights-backend.*'
+    line: '    image: casudo/hevy-insights-backend:latest'
+  tags:
+    - hevy
+    - hevy-config
+
+- name: Update frontend image in fitness.yml
+  ansible.builtin.lineinfile:
+    path: "{{ compose_file }}"
+    regexp: '^\s+image:\s+.*hevy-insights-frontend.*'
+    line: '    image: casudo/hevy-insights-frontend:latest'
+  tags:
+    - hevy
+    - hevy-config
+
+- name:  Start Hevy Insights with docker-compose
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_root }}/fitness"
+    files: fitness.yml
+    state: present
+  tags:
+    - hevy
+    - hevy-deploy
+
+- name: Wait for frontend to be healthy
+  ansible.builtin.uri:
+    url: "http://localhost:{{ frontend_port }}"
+    status_code: 200
+  register:  result
+  until: result. status == 200
+  retries: 30
+  delay: 2
+  tags:
+    - hevy
+    - hevy-deploy

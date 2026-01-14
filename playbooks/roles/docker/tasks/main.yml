@@ -43,13 +43,6 @@
   tags:
     - docker
     - networking
-- name: Create shared Docker network for media services
-  community.docker.docker_network:
-    name: media_network
-    state: present
-  tags:
-    - docker
-    - networking
 
 - name: run portainer docker compose file
   community.docker.docker_compose_v2:

@@ -1,0 +1,36 @@
+- name: Create Tandoor directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state:  directory
+    mode: "0755"
+  loop:
+    - "{{ database_dir }}/recipes"
+    - "{{ media_path }}/recipes"
+    - "{{ compose_root }}/kitchen"
+  tags:
+    - kitchen
+
+- name: create .env file for kitchen stack
+  copy:
+    dest: "{{ compose_root }}/kitchen/.env"
+    owner: root
+    group: docker
+    mode: "0640"
+    content: |
+      RECIPES_DB_NAME=recipes
+      RECIPES_DB_USER=djangodb
+      RECIPES_DB_PASSWORD={{ tandoor_postgres_password }}
+      RECIPES_SECRET_KEY={{ tandoor_secret_key }}
+      RECIPES_ALLOWED_HOSTS=*
+      CONFIG_DIR={{ config_dir }}
+      DATABASE_DIR={{ database_dir }}
+      MEDIA_DIR={{ media_path }}
+  tags:
+      - kitchen
+
+- name: run kitchen compose file
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_root }}/kitchen"
+    files: kitchen.yml
+  tags:
+    - kitchen

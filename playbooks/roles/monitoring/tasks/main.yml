@@ -1,0 +1,97 @@
+- name: Ensure prometheus config directory exists
+  file:
+    path: "{{ config_dir }}/prometheus"
+    state: directory
+    owner: "65534"
+    group: "65534"
+    mode: "0755"
+  tags:
+    - monitoring
+
+- name: Ensure prometheus database directory exists
+  file:
+    path: "{{ database_dir }}/prometheus"
+    state: directory
+    owner: "65534"
+    group: "65534"
+    mode: "0755"
+  tags:
+    - monitoring
+
+- name: Ensure grafana config directory exists
+  file:
+    path: "{{ config_dir }}/grafana"
+    state: directory
+    owner:  "472"  # Grafana user
+    group: "472"  # Grafana group
+    mode: "0755"
+  become: yes
+  tags:
+    - monitoring
+
+- name: Ensure grafana database directory exists
+  file:
+    path: "{{ database_dir }}/grafana"
+    state:  directory
+    owner: "472"
+    group: "472"
+    mode: "0755"
+  become: yes
+  tags: 
+    - monitoring
+
+- name: Create .env file for monitoring stack
+  copy:
+    dest: "{{ compose_root }}/monitoring/.env"
+    owner: root
+    group: docker
+    mode: "0640"
+    become: yes
+    content: |
+      CONFIG_DIR={{ config_dir }}
+      DATABASE_DIR={{ database_dir }}
+      GRAFANA_ADMIN_USER={{ grafana_admin_user }}
+      GRAFANA_ADMIN_PASSWORD={{ grafana_admin_password }}
+      WATCHTOWER_DISCORD_TOKEN={{ watchtower_discord_token }}
+      WATCHTOWER_DISCORD_WEBHOOKID={{ watchtower_discord_id }}
+  tags:
+    - monitoring
+
+
+- name: Create prometheus.yml config file
+  template:
+    src: prometheus.yml.j2
+    dest: "{{ config_dir }}/prometheus/prometheus.yml"
+    owner: "65534"
+    group:  "65534"
+    mode:  "0644"
+  tags: 
+    - monitoring
+
+- name: Create alert rules directory
+  file:
+    path:  "{{ config_dir }}/prometheus/rules"
+    state: directory
+    owner: "65534"
+    group: "65534"
+    mode: "0755"
+  tags:
+    - monitoring
+
+- name: Create basic alert rules
+  template:
+    src: prometheus-alerts.yml.j2
+    dest: "{{ config_dir }}/prometheus/rules/alerts.yml"
+    owner: "65534"
+    group: "65534"
+    mode: "0644"
+  tags:
+    - monitoring
+
+
+- name: run monitoring compose file
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_root }}/monitoring"
+    files:  "monitoring.yml"
+  tags:
+    - monitoring

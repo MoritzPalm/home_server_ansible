@@ -8,5 +8,7 @@
     - docker
     - arr
     - music
-    - music
-# TODO: reverse putting all arrs behind vpn but make a docker network for them
+    - monitoring
+    - fitness
+    - kitchen
+    - productivity
