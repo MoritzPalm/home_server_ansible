@@ -1,0 +1,7 @@
+- name: Create config directory for slskd
+  file:
+    path: "{{ config_dir }}/slskd"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: docker
+    mode: "0640"

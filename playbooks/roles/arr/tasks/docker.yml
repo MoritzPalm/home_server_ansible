@@ -18,6 +18,7 @@
     dest: "{{ compose_root }}/arr/.env"
     owner: root
     group: docker
+    mode: "0640"
     content: |
       CONFIG_DIR={{ config_dir }}
       MEDIA_PATH={{ media_path }}
@@ -34,6 +35,7 @@
     dest: "{{ config_dir }}/slskd/slskd.yml"
     owner: root
     group: docker
+    mode: "0640"
     content: |
       remote_configuration: true
       headless: false # change this as soon as soularr works
@@ -66,6 +68,7 @@
     dest: "{{ config_dir }}/soularr/config.ini"
     owner: root
     group: docker
+    mode: "0640"
     content: |
       [Lidarr]
       api_key = {{ lidarr_api_key }}

@@ -1,0 +1,7 @@
+- name: Create config directory for bazarr 
+  file:
+    path: "{{ config_dir }}/bazarr"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0640"

@@ -1,3 +1,11 @@
+- name: Create config directory for prowlarr
+  file:
+    path: "{{ config_dir }}/prowlarr"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0640"
+
 - name: Read Radarr config
   slurp:
     src: "{{ config_dir }}/radarr/config.xml"

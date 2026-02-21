@@ -1,3 +1,11 @@
+- name: Create config directory for sonarr
+  file:
+    path: "{{ config_dir }}/sonarr"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0640"
+
 - name: wait for Sonarr to be up
   uri:
     url: "http://{{ ansible_ssh_host }}:8989/sonarr/ping"

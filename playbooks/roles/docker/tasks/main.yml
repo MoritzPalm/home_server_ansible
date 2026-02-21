@@ -25,6 +25,7 @@
     dest: "{{ compose_root }}/portainer/admin_password.txt"
     owner: root
     group: docker
+    mode: "0640"
     content: "{{ portainer_admin_password }}"
 
 - name: create env file for portainer
@@ -32,6 +33,7 @@
     dest: "{{ compose_root }}/portainer/.env"
     owner: root
     group: docker
+    mode: "0640"
     content: |
       ADMIN_PASSWORD_FILE={{ compose_root }}/portainer/admin_password.txt
       PORTAINER_LICENSE_KEY={{ portainer_license_key }}

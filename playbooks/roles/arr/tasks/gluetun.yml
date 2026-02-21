@@ -1,0 +1,7 @@
+- name: Create config directory for gluetun 
+  file:
+    path: "{{ config_dir }}/gluetun"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0640"

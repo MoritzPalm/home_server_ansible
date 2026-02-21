@@ -41,12 +41,12 @@
     - monitoring
 
 - name: Create .env file for monitoring stack
+  become: yes
   copy:
     dest: "{{ compose_root }}/monitoring/.env"
     owner: root
     group: docker
     mode: "0640"
-    become: yes
     content: |
       CONFIG_DIR={{ config_dir }}
       DATABASE_DIR={{ database_dir }}
