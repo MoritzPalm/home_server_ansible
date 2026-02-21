@@ -56,18 +56,18 @@
     headers:
       X-Api-Key: "{{ sonarr_api_key }}"
     return_content: true
-  register: radarr_downloadclients
+  register: sonarr_downloadclients
 
 - name: Extract Downloadclient IDs
   set_fact:
-    radarr_downloadclient_id_list: >-
-      {{ radarr_downloadclients.json
+    sonarr_downloadclient_id_list: >-
+      {{ sonarr_downloadclients.json
         | map(attribute='id')
         | list }}
 
 - name: Build qbittorrent application body
   set_fact:
-    radarr_qbittorrent_body:
+    sonarr_qbittorrent_body:
       name: "qBittorrent"
       enable: true
       protocol: "torrent"
@@ -91,7 +91,7 @@
 
 - name: Create qbittorrent download client if missing
   when: >
-    (radarr_downloadclients.json
+    (sonarr_downloadclients.json
       | selectattr('implementation', 'equalto', 'QBittorrent')
       | list
       | length) == 0
@@ -101,9 +101,9 @@
     headers:
       X-Api-Key: "{{ sonarr_api_key }}"
     body_format: json
-    body: "{{ radarr_qbittorrent_body }}"
+    body: "{{ sonarr_qbittorrent_body }}"
     status_code: [200, 201]
     return_content: true
-  register: radarr_qbittorrent_create
+  register: sonarr_qbittorrent_create
   ignore_errors: yes
 
