@@ -51,10 +51,9 @@
     - /srv/data/db
     - /srv/data/cache
 
-
 - name: Create config dirs for apps
   file:
-    path: "{{ config_dir }}"
+    path: "{{ config_path }}"
     state: directory
     owner: "{{ admin_user }}"
     group: docker

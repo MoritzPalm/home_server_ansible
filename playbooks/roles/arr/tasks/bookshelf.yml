@@ -1,3 +1,11 @@
+- name: Create config directory for bookshelf
+  file:
+    path: "{{ config_path }}/bookshelf"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0750"
+    
 - name: wait for bookshelf to be up
   uri:
     url: "http://{{ ansible_ssh_host }}:8787/ping"

@@ -3,10 +3,10 @@
     dest: "{{ compose_root }}/media/.env"
     owner: root
     group: docker
-    mode: "0640"
+    mode: "0750"
     content: |
       MEDIA_PATH={{ media_path }}
-      CONFIG_DIR={{ config_dir }}
+      CONFIG_PATH={{ config_path }}
 
 - name: run media compose file
   community.docker.docker_compose_v2:
@@ -20,19 +20,19 @@
     group: docker
     mode: "0640"
     content: |
-      CONFIG_DIR={{ config_dir }}
+      CONFIG_PATH={{ config_path }}
       MEDIA_PATH={{ media_path }}
       STORAGE_DIR={{ storage_dir }}
       OPENVPN_USERNAME={{ openvpn_username }}
       OPENVPN_PASSWORD={{ openvpn_password }}
-      TORRENT_PATH={{ torrent_dir }}
+      TORRENT_PATH={{ torrent_path }}
       MAM_SESSION_ID={{ mam_id }}
       ABR_USERNAME={{ abr_username }}
       ABR_PASSWORD={{ abr_password }}
 
 - name: create yml config file for soulseek
   copy:
-    dest: "{{ config_dir }}/slskd/slskd.yml"
+    dest: "{{ config_path }}/slskd/slskd.yml"
     owner: root
     group: docker
     mode: "0640"
@@ -65,7 +65,7 @@
 
 - name: create config file for soularr
   copy:
-    dest: "{{ config_dir }}/soularr/config.ini"
+    dest: "{{ config_path }}/soularr/config.ini"
     owner: root
     group: docker
     mode: "0640"

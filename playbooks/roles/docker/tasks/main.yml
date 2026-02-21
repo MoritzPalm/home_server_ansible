@@ -5,7 +5,7 @@
   changed_when: false
   loop:
     - "{{ compose_root }}"
-    - "{{ config_dir }}"
+    - "{{ config_path }}"
   tags:
     - docker
 

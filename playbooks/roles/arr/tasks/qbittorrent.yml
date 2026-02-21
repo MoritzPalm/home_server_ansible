@@ -1,16 +1,16 @@
 - name: Create config directory for qbittorrent 
   file:
-    path: "{{ config_dir }}/qbittorrent"
+    path: "{{ config_path }}/qbittorrent"
     state: directory
     owner: 1000
     group: 1000
-    mode: "0640"
+    mode: "0750"
 
 - name: qBittorrent Configuration Block
   block:
     - name: Set qBittorrent variable facts
       set_fact:
-        qbittorrent_config_file: "{{ config_dir }}/qbittorrent/qBittorrent/qBittorrent.conf"
+        qbittorrent_config_file: "{{ config_path }}/qbittorrent/qBittorrent/qBittorrent.conf"
         qbt_settings: 
           - { section: "BitTorrent", option: "Session\\SavePath", value: "/data/torrents/" }
           - { section: "BitTorrent", option: "Session\\TempPath", value: "/data/torrents/incomplete/" }
@@ -23,7 +23,7 @@
 
     - name: Ensure qBittorrent config dir exists
       file:
-        path: "{{ config_dir }}/qbittorrent/qBittorrent"
+        path: "{{ config_path }}/qbittorrent/qBittorrent"
         state: directory
         owner: 1000
         group: 1000

@@ -2,11 +2,11 @@ timezone: Europe/Berlin
 admin_user: moritzpalm
 
 compose_root: /srv/compose
-config_dir: /srv/data/configs
+config_path: /srv/data/configs
 database_dir: /srv/data/db
 cache_dir: /srv/data/cache
 media_path: /mnt/storage/media
-torrent_dir: /mnt/storage/torrents
+torrent_path: /mnt/storage/torrents
 storage_dir: /mnt/storage
 log_dir: /srv/logs
 

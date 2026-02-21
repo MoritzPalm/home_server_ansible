@@ -22,9 +22,9 @@
       RECIPES_DB_PASSWORD={{ tandoor_postgres_password }}
       RECIPES_SECRET_KEY={{ tandoor_secret_key }}
       RECIPES_ALLOWED_HOSTS=*
-      CONFIG_DIR={{ config_dir }}
+      CONFIG_PATH={{ config_path }}
       DATABASE_DIR={{ database_dir }}
-      MEDIA_DIR={{ media_path }}
+      MEDIA_PATH={{ media_path }}
   tags:
       - kitchen
 

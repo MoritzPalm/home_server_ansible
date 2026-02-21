@@ -1,7 +1,7 @@
 - name: Create config directory for whisparr 
   file:
-    path: "{{ config_dir }}/whisparr"
+    path: "{{ config_path }}/whisparr"
     state: directory
     owner: 1000
     group: 1000
-    mode: "0640"
+    mode: "0750"

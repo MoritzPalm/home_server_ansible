@@ -1,10 +1,10 @@
 - name: Create config directory for overseerr 
   file:
-    path: "{{ config_dir }}/overseerr"
+    path: "{{ config_path }}/overseerr"
     state: directory
     owner: 1000
     group: 1000
-    mode: "0640"
+    mode: "0750"
 
 - name: Wait for Overseerr to be up
   uri:
@@ -18,7 +18,7 @@
 
 - name: Read Overseerr config
   slurp:
-    src: "{{ config_dir }}/overseerr/settings.json"
+    src: "{{ config_path }}/overseerr/settings.json"
   register: overseerr_config_raw
 
 - name: Decode Overseerr settings

@@ -1,6 +1,6 @@
 - name: Ensure prometheus config directory exists
   file:
-    path: "{{ config_dir }}/prometheus"
+    path: "{{ config_path }}/prometheus"
     state: directory
     owner: "65534"
     group: "65534"
@@ -20,7 +20,7 @@
 
 - name: Ensure grafana config directory exists
   file:
-    path: "{{ config_dir }}/grafana"
+    path: "{{ config_path }}/grafana"
     state: directory
     owner:  "472"  # Grafana user
     group: "472"  # Grafana group
@@ -48,7 +48,7 @@
     group: docker
     mode: "0640"
     content: |
-      CONFIG_DIR={{ config_dir }}
+      CONFIG_PATH={{ config_path }}
       DATABASE_DIR={{ database_dir }}
       GRAFANA_ADMIN_USER={{ grafana_admin_user }}
       GRAFANA_ADMIN_PASSWORD={{ grafana_admin_password }}
@@ -61,7 +61,7 @@
 - name: Create prometheus.yml config file
   template:
     src: prometheus.yml.j2
-    dest: "{{ config_dir }}/prometheus/prometheus.yml"
+    dest: "{{ config_path }}/prometheus/prometheus.yml"
     owner: "65534"
     group:  "65534"
     mode:  "0644"
@@ -70,7 +70,7 @@
 
 - name: Create alert rules directory
   file:
-    path:  "{{ config_dir }}/prometheus/rules"
+    path:  "{{ config_path }}/prometheus/rules"
     state: directory
     owner: "65534"
     group: "65534"
@@ -81,7 +81,7 @@
 - name: Create basic alert rules
   template:
     src: prometheus-alerts.yml.j2
-    dest: "{{ config_dir }}/prometheus/rules/alerts.yml"
+    dest: "{{ config_path }}/prometheus/rules/alerts.yml"
     owner: "65534"
     group: "65534"
     mode: "0644"

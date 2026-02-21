@@ -1,6 +1,6 @@
 - name: Create config dirs for apps
   file:
-    path: "{{ config_dir }}/soulsync"
+    path: "{{ config_path }}/soulsync"
     state: directory
     owner: "{{ admin_user }}"
     group: docker
@@ -12,7 +12,7 @@
 - name: create soulsync config from template FIRST
   ansible.builtin.template:
     src: soulsync_config.json.j2
-    dest: "{{ config_dir }}/soulsync/config.json"
+    dest: "{{ config_path }}/soulsync/config.json"
     owner: "{{ admin_user }}"
     group: docker
     mode: "0640"
@@ -49,9 +49,9 @@
     group: docker
     mode: "0640"
     content: |
-      MEDIA_DIR={{ media_path }}
-      CONFIG_DIR={{ config_dir }}
-      TORRENT_DIR={{ torrent_dir }}
+      MEDIA_PATH={{ media_path }}
+      CONFIG_PATH={{ config_path }}
+      TORRENT_PATH={{ torrent_path }}
       LOG_DIR={{ log_dir }}
       STORAGE_DIR={{ storage_dir }}
       DATABASE_DIR={{ database_dir }}

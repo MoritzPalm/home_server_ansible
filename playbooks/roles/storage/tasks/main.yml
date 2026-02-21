@@ -64,13 +64,13 @@
     group: docker
     mode: "0775"
   loop:
-    - "{{ torrent_dir }}"
-    - "{{ torrent_dir }}/incomplete"
-    - "{{ torrent_dir }}/complete"
+    - "{{ torrent_path }}"
+    - "{{ torrent_path }}/incomplete"
+    - "{{ torrent_path }}/complete"
 
 - name: ensure media directories have correct permissions
   ansible.builtin.file:
-    path: "{{ torrent_dir }}"
+    path: "{{ torrent_path }}"
     owner: "{{ admin_user }}"
     group: docker
     mode: "0775"
