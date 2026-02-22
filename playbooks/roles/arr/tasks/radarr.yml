@@ -104,6 +104,6 @@
     status_code: [200, 201]
     return_content: true
   register: radarr_qbittorrent_create
-  ignore_errors: yes
+  ignore_errors: true
 
 

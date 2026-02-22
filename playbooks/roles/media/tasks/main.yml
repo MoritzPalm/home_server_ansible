@@ -1,0 +1,35 @@
+- name: Configure plex 
+  ansible.builtin.import_tasks: plex.yml
+  tags:
+    - media
+    - media-plex
+
+- name: Configure soulsync
+  ansible.builtin.import_tasks: soulsync.yml
+  tags:
+    - media
+    - media-soulsync
+
+- name: Create .env file for media stack
+  copy:
+    dest: "{{ compose_root }}/media/.env"
+    owner: root
+    group: docker
+    mode: "0750"
+    content: |
+      MEDIA_PATH={{ media_path }}
+      CONFIG_PATH={{ config_path }}
+      TORRENT_PATH={{ torrent_path }}
+      LOG_DIR={{ log_dir }}
+      STORAGE_DIR={{ storage_dir }}
+      DATABASE_DIR={{ database_dir }}
+      SOULSEEK_PATH={{ soulseek_path }}
+  tags:
+    - media
+
+- name: Run media.yml compose file
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_root }}/media"
+    files: "media.yml"
+  tags:
+    - media

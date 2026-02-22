@@ -1,0 +1,8 @@
+- name: Create config directory for audiobookrequest
+  file: 
+    path: "{{ config_path }}/audiobookrequest"
+    state: directory
+    owner: root
+    group: docker 
+    mode: "0777"
+

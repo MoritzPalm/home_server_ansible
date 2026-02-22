@@ -6,7 +6,9 @@ config_path: /srv/data/configs
 database_dir: /srv/data/db
 cache_dir: /srv/data/cache
 media_path: /mnt/storage/media
-torrent_path: /mnt/storage/torrents
+torrent_path: /mnt/storage/downloads/torrents
+download_path: /mnt/storage/downloads
+soulseek_path: /mnt/storage/downloads/soulseek
 storage_dir: /mnt/storage
 log_dir: /srv/logs
 

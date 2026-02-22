@@ -5,7 +5,7 @@
     owner: 1000
     group: 1000
     mode: "0750"
-    
+
 - name: wait for bookshelf to be up
   uri:
     url: "http://{{ ansible_ssh_host }}:8787/ping"
@@ -100,6 +100,6 @@
     status_code: [200, 201]
     return_content: true
   register: bookshelf_qbittorrent_create
-  ignore_errors: yes
+  ignore_errors: true
 
 

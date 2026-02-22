@@ -432,7 +432,7 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_qbittorrent_create
-  ignore_errors: yes
+  ignore_errors: true
 
 
 # adding indexers
@@ -591,7 +591,7 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_1337x_create
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Create EZTV Indexer if it does not exists
   when: >
@@ -609,7 +609,7 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_eztv_create 
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Create MyAnonamouse Freeleech Indexer if it does not exist
   when: >
@@ -627,7 +627,7 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_mam_create
-  ignore_errors: yes
+  ignore_errors: true
 
 
 - name: Create TorrentLeech Freeleech Indexer if it does not exist
@@ -646,7 +646,7 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_torrentleech_create
-  ignore_errors: yes
+  ignore_errors: true
 
 
 - name: Update existing 1337x Indexer if config should be enforced
@@ -661,7 +661,7 @@
     status_code: [200, 202]
     return_content: true
   register: prowlarr_1337x_update
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Update existing EZTV Indexer if config should be enforced
   when: prowlarr_eztv_id != ''
@@ -675,7 +675,7 @@
     status_code: [200, 202]
     return_content: true
   register: prowlarr_eztv_update
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Update existing MyAnonamouse Indexer if config should be enforced
   when: prowlarr_mam_id_existing != ''
@@ -689,7 +689,7 @@
     status_code: [200, 202]
     return_content: true
   register: prowlarr_mam_update
-  ignore_errors: yes
+  ignore_errors: true
 
 - name: Update existing TorrentLeech Indexer if config should be enforced
   when: prowlarr_torrentleech_id != ''
@@ -703,7 +703,7 @@
     status_code: [200, 202]
     return_content: true
   register: prowlarr_torrentleech_update
-  ignore_errors: yes
+  ignore_errors: true
 
 
 

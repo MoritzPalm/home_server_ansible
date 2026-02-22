@@ -1,0 +1,7 @@
+- name: Create config directory for plex 
+  file:
+    path: "{{ config_path }}/plex"
+    state: directory
+    owner: root
+    group: docker 
+    mode: "0750"

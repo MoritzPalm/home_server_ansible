@@ -1,3 +1,9 @@
+- name: Configure audiobookrequest
+  ansible.builtin.import_tasks: audiobookrequest.yml
+  tags:
+    - arr
+    - arr-audiobookrequest
+
 - name: Configure bazarr
   ansible.builtin.import_tasks: bazarr.yml
   tags:

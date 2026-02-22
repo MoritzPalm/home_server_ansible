@@ -25,7 +25,7 @@
     owner:  "472"  # Grafana user
     group: "472"  # Grafana group
     mode: "0755"
-  become: yes
+  become: true 
   tags:
     - monitoring
 
@@ -36,12 +36,12 @@
     owner: "472"
     group: "472"
     mode: "0755"
-  become: yes
+  become: true
   tags: 
     - monitoring
 
 - name: Create .env file for monitoring stack
-  become: yes
+  become: true
   copy:
     dest: "{{ compose_root }}/monitoring/.env"
     owner: root

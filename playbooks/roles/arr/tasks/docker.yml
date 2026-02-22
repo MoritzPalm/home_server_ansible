@@ -1,18 +1,3 @@
-- name: Create .env file for media stack
-  copy:
-    dest: "{{ compose_root }}/media/.env"
-    owner: root
-    group: docker
-    mode: "0750"
-    content: |
-      MEDIA_PATH={{ media_path }}
-      CONFIG_PATH={{ config_path }}
-
-- name: run media compose file
-  community.docker.docker_compose_v2:
-    project_src: "{{ compose_root }}/media"
-    files: "media.yml"
-
 - name: create env file for arr stack
   copy:
     dest: "{{ compose_root }}/arr/.env"
@@ -29,12 +14,13 @@
       MAM_SESSION_ID={{ mam_id }}
       ABR_USERNAME={{ abr_username }}
       ABR_PASSWORD={{ abr_password }}
+      SOULSEEK_PATH={{ soulseek_path }}
 
 - name: create yml config file for soulseek
   copy:
     dest: "{{ config_path }}/slskd/slskd.yml"
-    owner: root
-    group: docker
+    owner: 1000 
+    group: 1000
     mode: "0640"
     content: |
       remote_configuration: true
@@ -43,7 +29,8 @@
         file:
           mode: 644
       directories:
-        downloads: /downloads
+        downloads: /downloads/complete
+        incomplete: /downloads/incomplete
       remote_file_management: true
       shares:
         directories:

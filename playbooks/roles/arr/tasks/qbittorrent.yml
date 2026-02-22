@@ -2,9 +2,9 @@
   file:
     path: "{{ config_path }}/qbittorrent"
     state: directory
-    owner: 1000
-    group: 1000
-    mode: "0750"
+    owner: root 
+    group: docker 
+    mode: "0777"
 
 - name: qBittorrent Configuration Block
   block:
@@ -12,8 +12,8 @@
       set_fact:
         qbittorrent_config_file: "{{ config_path }}/qbittorrent/qBittorrent/qBittorrent.conf"
         qbt_settings: 
-          - { section: "BitTorrent", option: "Session\\SavePath", value: "/data/torrents/" }
-          - { section: "BitTorrent", option: "Session\\TempPath", value: "/data/torrents/incomplete/" }
+          - { section: "BitTorrent", option: "Session\\SavePath", value: "/data/downloads/torrents/" }
+          - { section: "BitTorrent", option: "Session\\TempPath", value: "/data/downloads/torrents/incomplete/" }
           - { section: "BitTorrent", option: "Session\\TempPathEnabled", value: "true" }
           - { section: "BitTorrent", option: "Session\\LSDEnabled", value: "false" }
           - { section: "BitTorrent", option: "Session\\PeXEnabled", value: "false" }

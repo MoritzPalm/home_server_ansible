@@ -42,4 +42,4 @@
     status_code: 200
     return_content: true
   register: overseerr_auth
-  ignore_errors: yes
+  ignore_errors: true

@@ -56,22 +56,40 @@
   changed_when: false
 
 
-- name: ensure media directories exist
-  file: 
+- name: Create download directories
+  file:
     path: "{{ item }}"
     state: directory
-    owner: "{{ admin_user }}" 
-    group: docker
-    mode: "0775"
-  loop:
-    - "{{ torrent_path }}"
-    - "{{ torrent_path }}/incomplete"
-    - "{{ torrent_path }}/complete"
-
-- name: ensure media directories have correct permissions
-  ansible.builtin.file:
-    path: "{{ torrent_path }}"
     owner: "{{ admin_user }}"
     group: docker
     mode: "0775"
-    recurse: yes
+  loop:
+    - "{{ downloads_path }}"
+    # torrent sub-dirs
+    - "{{ torrent_path }}"
+    - "{{ torrent_path }}/incomplete"
+    - "{{ torrent_path }}/movies"
+    - "{{ torrent_path }}/tv"
+    - "{{ torrent_path }}/music"
+    - "{{ torrent_path }}/books"
+    - "{{ torrent_path }}/xxx"
+    # soulseek sub-dirs
+    - "{{ soulseek_path }}"
+    - "{{ soulseek_path }}/incomplete"
+    - "{{ soulseek_path }}/complete"
+
+
+- name: Create media directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: docker
+    mode: "0775"
+  loop:
+    - "{{ media_path }}"
+    - "{{ media_path }}/movies"
+    - "{{ media_path }}/tv"
+    - "{{ media_path }}/music"
+    - "{{ media_path }}/books"
+    - "{{ media_path }}/xxx"
