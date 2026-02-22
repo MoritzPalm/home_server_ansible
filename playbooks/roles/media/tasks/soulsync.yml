@@ -11,7 +11,7 @@
 
 - name: create soulsync config from template FIRST
   ansible.builtin.template:
-    src: soulsync_config.json.j2
+    src: templates/soulsync_config.json.j2
     dest: "{{ config_path }}/soulsync/config.json"
     owner: "{{ admin_user }}"
     group: docker

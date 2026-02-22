@@ -19,7 +19,7 @@
     content: |
       MEDIA_PATH={{ media_path }}
       CONFIG_PATH={{ config_path }}
-      TORRENT_PATH={{ torrent_path }}
+      DOWNLOADS_PATH={{ downloads_path }}
       LOG_DIR={{ log_dir }}
       STORAGE_DIR={{ storage_dir }}
       DATABASE_DIR={{ database_dir }}
