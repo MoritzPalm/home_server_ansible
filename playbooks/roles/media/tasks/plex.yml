@@ -2,6 +2,6 @@
   file:
     path: "{{ config_path }}/plex"
     state: directory
-    owner: root
-    group: docker 
+    owner: 1000
+    group: 1000
     mode: "0750"

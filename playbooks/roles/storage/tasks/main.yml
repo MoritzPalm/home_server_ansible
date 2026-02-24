@@ -65,7 +65,6 @@
     mode: "0775"
   loop:
     - "{{ downloads_path }}"
-    # torrent sub-dirs
     - "{{ torrent_path }}"
     - "{{ torrent_path }}/incomplete"
     - "{{ torrent_path }}/movies"
@@ -73,7 +72,15 @@
     - "{{ torrent_path }}/music"
     - "{{ torrent_path }}/books"
     - "{{ torrent_path }}/xxx"
-    # soulseek sub-dirs
+
+- name: Create soulseek download directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0775"
+  loop:
     - "{{ soulseek_path }}"
     - "{{ soulseek_path }}/incomplete"
     - "{{ soulseek_path }}/complete"

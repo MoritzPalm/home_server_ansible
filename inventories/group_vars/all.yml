@@ -22,7 +22,7 @@ ssd_dirs:
   - "/srv/logs"
 pool_dirs: 
   - "/media/storage/media"
-  - "/media/storage/torrents"
+  - "/media/storage/downloads"
   - "/media/storage/backups"
 
 tailscale_operator: "moritzpalm" 

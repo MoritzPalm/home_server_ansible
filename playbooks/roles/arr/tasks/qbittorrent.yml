@@ -4,7 +4,7 @@
     state: directory
     owner: root 
     group: docker 
-    mode: "0777"
+    mode: "0750"
 
 - name: qBittorrent Configuration Block
   block:

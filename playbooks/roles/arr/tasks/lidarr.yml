@@ -29,7 +29,7 @@
   set_fact:
     lidarr_root_folder_body:
       name: "music"
-      path: "/data/music"
+      path: "/data/media/music"
       defaultMetadataProfileId: 1
       defaultQualityProfileId: 1
       defaultMonitorOption: "all"
