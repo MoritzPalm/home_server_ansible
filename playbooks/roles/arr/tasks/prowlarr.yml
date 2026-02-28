@@ -465,13 +465,22 @@
          | first)
         | default('', true)
       }}
-    prowlarr_mam_id_existing: >-
+    prowlarr_mam_id: >-
       {{
         (prowlarr_indexers.json
          | selectattr('definitionName', 'contains', 'MyAnonamouse')
          | map(attribute='id')
          | list
          | first)
+        | default('', true)
+      }}
+    prowlarr_mam_fl_id: >-
+      {{
+        (prowlarr_indexers.json
+        | selectattr('definitionName', 'contains', 'MyAnonamouse Freeleech')
+        | map(attribute='id')
+        | list
+        | first)
         | default('', true)
       }}
     prowlarr_torrentleech_id: >-
@@ -515,10 +524,10 @@
         - name: definitionFile
           value: "eztv"
 
-- name: build MyAnonamouse Indexer body
+- name: build MyAnonamouse Freeleech Indexer body
   set_fact:
-    prowlarr_mam_body:
-      definitionName: "MyAnonamouse"
+    prowlarr_mam_fl_body:
+      definitionName: "MyAnonamouse Freeleech"
       name: "MyAnonamouse Freeleech"
       enable: true
       redirect: false
@@ -531,6 +540,21 @@
           value: "{{ mam_id }}"
         - name: "searchType"
           value: "Freeleech"
+
+- name: build MyAnonamouse Indexer body
+  set_fact:
+    prowlarr_mam_body:
+      definitionName: "MyAnonamouse"
+      name: "MyAnonamouse"
+      enable: true
+      redirect: false
+      implementation: "MyAnonamouse"
+      configContract: "MyAnonamouseSettings"
+      priority: 10
+      appProfileId: 1
+      fields:
+        - name: "mamId"
+          value: "{{ mam_id }}"
 
 
 - name: build Torrentleech Indexer body
@@ -566,9 +590,14 @@
     prowlarr_eztv_body_update: "{{ prowlarr_eztv_body | combine({'id': prowlarr_eztv_id}) }}"
 
 - name: Build MyAnonamouse body with ID for update
-  when: prowlarr_mam_id_existing != ''
+  when: prowlarr_mam_id != ''
   set_fact:
-    prowlarr_mam_body_update: "{{ prowlarr_mam_body | combine({'id': prowlarr_mam_id_existing}) }}"
+    prowlarr_mam_body_update: "{{ prowlarr_mam_body | combine({'id': prowlarr_mam_id}) }}"
+
+- name: Build MyAnonamouse Freeleech body with ID for update
+  when: prowlarr_mam_fl_id != ''
+  set_fact:
+    prowlarr_mam_fl_body_update: "{{ prowlarr_mam_fl_body | combine({'id': prowlarr_mam_fl_id}) }}"
 
 - name: Build TorrentLeech body with ID for update
   when: prowlarr_torrentleech_id != ''
@@ -614,8 +643,27 @@
 - name: Create MyAnonamouse Freeleech Indexer if it does not exist
   when: >
     (prowlarr_indexers.json 
-    | selectattr('definitionName', 'contains', 'MyAnonamouse') 
+    | selectattr('definitionName', 'contains', 'MyAnonamouse Freeleech') 
     | list 
+    | length) == 0
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer"
+    method: POST
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_mam_fl_body }}"
+    status_code: [200, 201]
+    return_content: true
+  register: prowlarr_mam_fl_create
+  ignore_errors: true
+
+
+- name: Create MyAnonamouse Indexer if it does not exist
+  when: >
+    (prowlarr_indexers.json
+    | selectattr('definitionName', 'contains', 'MyAnonamouse')
+    | list
     | length) == 0
   uri:
     url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer"
@@ -678,9 +726,9 @@
   ignore_errors: true
 
 - name: Update existing MyAnonamouse Indexer if config should be enforced
-  when: prowlarr_mam_id_existing != ''
+  when: prowlarr_mam_id != ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer/{{ prowlarr_mam_id_existing }}"
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer/{{ prowlarr_mam_id }}"
     method: PUT
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -689,6 +737,20 @@
     status_code: [200, 202]
     return_content: true
   register: prowlarr_mam_update
+  ignore_errors: true
+
+- name: Update existing MyAnonamouse Freeleech Indexer if config should be enforced
+  when: prowlarr_mam_fl_id != ''
+  uri:
+    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer/{{ prowlarr_mam_fl_id }}"
+    method: PUT
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_mam_fl_body_update}}"
+    status_code: [200, 201]
+    return_content: true
+  register: prowlarr_mam_fl_update
   ignore_errors: true
 
 - name: Update existing TorrentLeech Indexer if config should be enforced
