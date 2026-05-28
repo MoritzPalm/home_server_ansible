@@ -8,7 +8,7 @@
 
 - name: wait for bookshelf to be up
   uri:
-    url: "http://{{ ansible_ssh_host }}:8787/ping"
+    url: "http://{{ ansible_host }}:8787/ping"
     method: HEAD
     status_code: 200
   register: bookshelf_ping
@@ -18,7 +18,7 @@
 
 - name: Get bookshelf root folders
   uri:
-    url: "http://{{ ansible_ssh_host }}:8787/api/v1/rootfolder"
+    url: "http://{{ ansible_host }}:8787/api/v1/rootfolder"
     method: GET
     headers:
       X-Api-Key: "{{ bookshelf_api_key }}"
@@ -41,7 +41,7 @@
     | list
     | length) == 0
   uri:
-    url: "http://{{ ansible_ssh_host }}:8787/api/v1/rootfolder"
+    url: "http://{{ ansible_host }}:8787/api/v1/rootfolder"
     method: POST
     headers:
       X-Api-Key: "{{ bookshelf_api_key }}"
@@ -53,7 +53,7 @@
 
 - name: Get existing download clients
   uri:
-    url: "http://{{ ansible_ssh_host }}:8787/api/v1/downloadclient"
+    url: "http://{{ ansible_host }}:8787/api/v1/downloadclient"
     method: GET
     headers:
       X-Api-Key: "{{ bookshelf_api_key }}"
@@ -76,10 +76,6 @@
           value: 8088
         - name: "useSsl"
           value: false
-        - name: "username"
-          value: "{{ qbittorrent_username }}"
-        - name: "password"
-          value: "{{ qbittorrent_password }}"
       implementationName: "qBittorrent"
       implementation: "QBittorrent"
       configContract: "QBittorrentSettings"
@@ -91,7 +87,7 @@
       | list
       | length) == 0
   uri:
-    url: "http://{{ ansible_ssh_host }}:8787/api/v1/downloadclient"
+    url: "http://{{ ansible_host }}:8787/api/v1/downloadclient"
     method: POST
     headers:
       X-Api-Key: "{{ bookshelf_api_key }}"
@@ -100,6 +96,5 @@
     status_code: [200, 201]
     return_content: true
   register: bookshelf_qbittorrent_create
-  ignore_errors: true
 
 

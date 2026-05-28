@@ -8,7 +8,7 @@
 
 - name: wait for Lidarr to be up
   uri:
-    url: "http://{{ ansible_ssh_host }}:8686/lidarr/ping"
+    url: "http://{{ ansible_host }}:8686/ping"
     method: GET
     status_code: 200
   register: lidarr_ping
@@ -18,7 +18,7 @@
 
 - name: Get Lidarr root folders
   uri:
-    url: "http://{{ ansible_ssh_host }}:8686/api/v1/rootfolder"
+    url: "http://{{ ansible_host }}:8686/api/v1/rootfolder"
     method: GET
     headers:
       X-Api-Key: "{{ lidarr_api_key }}"
@@ -40,11 +40,11 @@
 - name: Create Lidarr root folder if it does not exists with this path
   when: >
     (lidarr_root_folders.json
-    |selectattr('path', 'contains', '/data/music')
-    |list
+    | selectattr('path', 'contains', '/data/media/music')
+    | list
     | length) == 0
   uri:
-    url: "http://{{ ansible_ssh_host }}:8686/api/v1/rootfolder"
+    url: "http://{{ ansible_host }}:8686/api/v1/rootfolder"
     method: POST
     headers:
       X-Api-Key: "{{ lidarr_api_key }}"

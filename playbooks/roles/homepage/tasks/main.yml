@@ -1,0 +1,90 @@
+- name: Create homepage config directory
+  file:
+    path: "{{ config_path }}/homepage"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: docker
+    mode: "0775"
+  tags:
+    - homepage
+
+- name: Create Docker networks required by homepage
+  community.docker.docker_network:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - internal
+    - external
+  tags:
+    - homepage
+
+- name: Create .env file for homepage stack
+  copy:
+    dest: "{{ compose_root }}/homepage/.env"
+    owner: root
+    group: docker
+    mode: "0640"
+    content: |
+      HOST_IP={{ host_ip }}
+      CONFIG_PATH={{ config_path }}
+  tags:
+    - homepage
+
+- name: Render homepage docker.yaml
+  template:
+    src: docker.yaml.j2
+    dest: "{{ config_path }}/homepage/docker.yaml"
+    owner: "{{ admin_user }}"
+    group: docker
+    mode: "0640"
+  tags:
+    - homepage
+
+- name: Render homepage settings.yaml
+  template:
+    src: settings.yaml.j2
+    dest: "{{ config_path }}/homepage/settings.yaml"
+    owner: "{{ admin_user }}"
+    group: docker
+    mode: "0640"
+  tags:
+    - homepage
+
+- name: Render homepage widgets.yaml
+  template:
+    src: widgets.yaml.j2
+    dest: "{{ config_path }}/homepage/widgets.yaml"
+    owner: "{{ admin_user }}"
+    group: docker
+    mode: "0640"
+  tags:
+    - homepage
+
+- name: Create empty homepage services.yaml if not present
+  copy:
+    dest: "{{ config_path }}/homepage/services.yaml"
+    content: "[]\n"
+    owner: "{{ admin_user }}"
+    group: docker
+    mode: "0640"
+    force: false
+  tags:
+    - homepage
+
+- name: Create empty homepage bookmarks.yaml if not present
+  copy:
+    dest: "{{ config_path }}/homepage/bookmarks.yaml"
+    content: "[]\n"
+    owner: "{{ admin_user }}"
+    group: docker
+    mode: "0640"
+    force: false
+  tags:
+    - homepage
+
+- name: Run homepage compose file
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_root }}/homepage"
+    files: homepage.yml
+  tags:
+    - homepage

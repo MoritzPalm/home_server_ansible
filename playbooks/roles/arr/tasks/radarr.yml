@@ -8,7 +8,7 @@
 
 - name: wait for Radarr to be up
   uri:
-    url: "http://{{ ansible_ssh_host }}:7878/radarr/ping"
+    url: "http://{{ ansible_host }}:7878/ping"
     method: GET
     status_code: 200
   register: radarr_ping
@@ -18,7 +18,7 @@
 
 - name: Get Radarr root folders
   uri:
-    url: "http://{{ ansible_ssh_host }}:7878/api/v3/rootfolder"
+    url: "http://{{ ansible_host }}:7878/api/v3/rootfolder"
     method: GET
     headers:
       X-Api-Key: "{{ radarr_api_key }}"
@@ -37,7 +37,7 @@
     | list
     | length) == 0
   uri:
-    url: "http://{{ ansible_ssh_host }}:7878/api/v3/rootfolder"
+    url: "http://{{ ansible_host }}:7878/api/v3/rootfolder"
     method: POST
     headers:
       X-Api-Key: "{{ radarr_api_key }}"
@@ -50,19 +50,12 @@
 
 - name: Get existing download clients
   uri:
-    url: "http://{{ ansible_ssh_host }}:7878/api/v3/downloadclient"
+    url: "http://{{ ansible_host }}:7878/api/v3/downloadclient"
     method: GET
     headers:
       X-Api-Key: "{{ radarr_api_key }}"
     return_content: true
   register: radarr_downloadclients
-
-- name: Extract Downloadclient IDs
-  set_fact:
-    radarr_downloadclient_id_list: >-
-      {{ radarr_downloadclients.json
-        | map(attribute='id')
-        | list }}
 
 - name: Build qbittorrent application body
   set_fact:
@@ -80,10 +73,6 @@
           value: 8088
         - name: "useSsl"
           value: false
-        - name: "username"
-          value: "{{ qbittorrent_username }}"
-        - name: "password"
-          value: "{{ qbittorrent_password }}"
       implementationName: "qBittorrent"
       implementation: "QBittorrent"
       configContract: "QBittorrentSettings"
@@ -95,7 +84,7 @@
       | list
       | length) == 0
   uri:
-    url: "http://{{ ansible_ssh_host }}:7878/api/v3/downloadclient"
+    url: "http://{{ ansible_host }}:7878/api/v3/downloadclient"
     method: POST
     headers:
       X-Api-Key: "{{ radarr_api_key }}"
@@ -104,6 +93,5 @@
     status_code: [200, 201]
     return_content: true
   register: radarr_qbittorrent_create
-  ignore_errors: true
 
 

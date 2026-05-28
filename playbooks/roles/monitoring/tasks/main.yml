@@ -1,10 +1,15 @@
-- name: Ensure prometheus config directory exists
+# --- Prometheus ---
+
+- name: Ensure prometheus config directories exist
   file:
-    path: "{{ config_path }}/prometheus"
+    path: "{{ item }}"
     state: directory
     owner: "65534"
     group: "65534"
     mode: "0755"
+  loop:
+    - "{{ config_path }}/prometheus"
+    - "{{ config_path }}/prometheus/rules"
   tags:
     - monitoring
 
@@ -18,67 +23,17 @@
   tags:
     - monitoring
 
-- name: Ensure grafana config directory exists
-  file:
-    path: "{{ config_path }}/grafana"
-    state: directory
-    owner:  "472"  # Grafana user
-    group: "472"  # Grafana group
-    mode: "0755"
-  become: true 
-  tags:
-    - monitoring
-
-- name: Ensure grafana database directory exists
-  file:
-    path: "{{ database_dir }}/grafana"
-    state:  directory
-    owner: "472"
-    group: "472"
-    mode: "0755"
-  become: true
-  tags: 
-    - monitoring
-
-- name: Create .env file for monitoring stack
-  become: true
-  copy:
-    dest: "{{ compose_root }}/monitoring/.env"
-    owner: root
-    group: docker
-    mode: "0640"
-    content: |
-      CONFIG_PATH={{ config_path }}
-      DATABASE_DIR={{ database_dir }}
-      GRAFANA_ADMIN_USER={{ grafana_admin_user }}
-      GRAFANA_ADMIN_PASSWORD={{ grafana_admin_password }}
-      WATCHTOWER_DISCORD_TOKEN={{ watchtower_discord_token }}
-      WATCHTOWER_DISCORD_WEBHOOKID={{ watchtower_discord_id }}
-  tags:
-    - monitoring
-
-
-- name: Create prometheus.yml config file
+- name: Render prometheus config
   template:
     src: prometheus.yml.j2
     dest: "{{ config_path }}/prometheus/prometheus.yml"
     owner: "65534"
-    group:  "65534"
-    mode:  "0644"
-  tags: 
-    - monitoring
-
-- name: Create alert rules directory
-  file:
-    path:  "{{ config_path }}/prometheus/rules"
-    state: directory
-    owner: "65534"
     group: "65534"
-    mode: "0755"
+    mode: "0644"
   tags:
     - monitoring
 
-- name: Create basic alert rules
+- name: Render prometheus alert rules
   template:
     src: prometheus-alerts.yml.j2
     dest: "{{ config_path }}/prometheus/rules/alerts.yml"
@@ -88,10 +43,217 @@
   tags:
     - monitoring
 
+# --- Alertmanager ---
 
-- name: run monitoring compose file
+- name: Ensure alertmanager config directory exists
+  file:
+    path: "{{ config_path }}/alertmanager"
+    state: directory
+    owner: "65534"
+    group: "65534"
+    mode: "0755"
+  tags:
+    - monitoring
+
+- name: Render alertmanager config
+  template:
+    src: alertmanager.yml.j2
+    dest: "{{ config_path }}/alertmanager/config.yml"
+    owner: "65534"
+    group: "65534"
+    mode: "0644"
+  tags:
+    - monitoring
+
+# --- Loki ---
+
+- name: Ensure loki config directory exists
+  file:
+    path: "{{ config_path }}/loki"
+    state: directory
+    owner: "10001"
+    group: "10001"
+    mode: "0755"
+  tags:
+    - monitoring
+
+- name: Ensure loki data directory exists
+  file:
+    path: "{{ database_dir }}/loki"
+    state: directory
+    owner: "10001"
+    group: "10001"
+    mode: "0755"
+  tags:
+    - monitoring
+
+- name: Render loki config
+  template:
+    src: loki.yml.j2
+    dest: "{{ config_path }}/loki/loki.yml"
+    owner: "10001"
+    group: "10001"
+    mode: "0644"
+  tags:
+    - monitoring
+
+# --- Promtail ---
+
+- name: Ensure promtail config directory exists
+  file:
+    path: "{{ config_path }}/promtail"
+    state: directory
+    owner: "root"
+    group: "root"
+    mode: "0755"
+  tags:
+    - monitoring
+
+- name: Render promtail config
+  template:
+    src: promtail.yml.j2
+    dest: "{{ config_path }}/promtail/promtail.yml"
+    owner: "root"
+    group: "root"
+    mode: "0644"
+  tags:
+    - monitoring
+
+# --- Grafana ---
+
+- name: Ensure grafana directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "472"
+    group: "472"
+    mode: "0755"
+  loop:
+    - "{{ config_path }}/grafana"
+    - "{{ config_path }}/grafana/provisioning"
+    - "{{ config_path }}/grafana/provisioning/datasources"
+    - "{{ config_path }}/grafana/provisioning/dashboards"
+  tags:
+    - monitoring
+
+- name: Ensure grafana database directory exists
+  file:
+    path: "{{ database_dir }}/grafana"
+    state: directory
+    owner: "472"
+    group: "472"
+    mode: "0755"
+  tags:
+    - monitoring
+
+- name: Render grafana datasource provisioning
+  template:
+    src: grafana-datasources.yml.j2
+    dest: "{{ config_path }}/grafana/provisioning/datasources/datasources.yml"
+    owner: "472"
+    group: "472"
+    mode: "0644"
+  tags:
+    - monitoring
+
+- name: Render grafana dashboard provider config
+  template:
+    src: grafana-dashboard-provider.yml.j2
+    dest: "{{ config_path }}/grafana/provisioning/dashboards/provider.yml"
+    owner: "472"
+    group: "472"
+    mode: "0644"
+  tags:
+    - monitoring
+
+- name: Render storage overview dashboard
+  template:
+    src: grafana-storage-dashboard.json.j2
+    dest: "{{ config_path }}/grafana/provisioning/dashboards/storage.json"
+    owner: "472"
+    group: "472"
+    mode: "0644"
+  tags:
+    - monitoring
+
+# --- .env ---
+
+- name: Create .env file for monitoring stack
+  copy:
+    dest: "{{ compose_root }}/monitoring/.env"
+    owner: root
+    group: docker
+    mode: "0640"
+    content: |
+      HOST_IP={{ host_ip }}
+      CONFIG_PATH={{ config_path }}
+      DATABASE_DIR={{ database_dir }}
+      GRAFANA_ADMIN_USER={{ grafana_admin_user }}
+      GRAFANA_ADMIN_PASSWORD={{ grafana_admin_password }}
+      WATCHTOWER_DISCORD_TOKEN={{ watchtower_discord_token }}
+      WATCHTOWER_DISCORD_WEBHOOKID={{ watchtower_discord_id }}
+  tags:
+    - monitoring
+
+# --- Compose ---
+
+- name: Run monitoring compose file
   community.docker.docker_compose_v2:
     project_src: "{{ compose_root }}/monitoring"
-    files:  "monitoring.yml"
+    files: monitoring.yml
+  tags:
+    - monitoring
+
+# --- Grafana dashboard import ---
+
+- name: Wait for Grafana to be up
+  uri:
+    url: "http://{{ ansible_host }}:3000/api/health"
+    method: GET
+    status_code: 200
+  register: grafana_health
+  retries: 30
+  delay: 5
+  until: grafana_health.status == 200
+  tags:
+    - monitoring
+
+- name: Fetch Node Exporter Full dashboard from grafana.com
+  uri:
+    url: "https://grafana.com/api/dashboards/1860/revisions/latest/download"
+    return_content: true
+  register: dashboard_node_exporter
+  tags:
+    - monitoring
+
+- name: Fetch Docker cadvisor dashboard from grafana.com
+  uri:
+    url: "https://grafana.com/api/dashboards/14282/revisions/latest/download"
+    return_content: true
+  register: dashboard_cadvisor
+  tags:
+    - monitoring
+
+- name: Import dashboards into Grafana
+  uri:
+    url: "http://{{ ansible_host }}:3000/api/dashboards/import"
+    method: POST
+    user: "{{ grafana_admin_user }}"
+    password: "{{ grafana_admin_password }}"
+    force_basic_auth: true
+    body_format: json
+    body:
+      overwrite: true
+      folderId: 0
+      inputs:
+        - name: "DS_PROMETHEUS"
+          type: datasource
+          pluginId: prometheus
+          value: Prometheus
+      dashboard: "{{ item }}"
+    status_code: [200]
+  loop:
+    - "{{ dashboard_node_exporter.json }}"
+    - "{{ dashboard_cadvisor.json }}"
   tags:
     - monitoring

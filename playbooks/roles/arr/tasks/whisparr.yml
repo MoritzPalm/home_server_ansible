@@ -1,7 +1,84 @@
-- name: Create config directory for whisparr 
+- name: Create config directory for whisparr
   file:
     path: "{{ config_path }}/whisparr"
     state: directory
     owner: 1000
     group: 1000
     mode: "0750"
+
+- name: Wait for Whisparr to be up
+  uri:
+    url: "http://{{ ansible_host }}:6969/ping"
+    method: GET
+    status_code: 200
+  register: whisparr_ping
+  retries: 30
+  delay: 2
+  until: whisparr_ping.status == 200
+
+- name: Get Whisparr root folders
+  uri:
+    url: "http://{{ ansible_host }}:6969/api/v3/rootfolder"
+    method: GET
+    headers:
+      X-Api-Key: "{{ whisparr_api_key }}"
+    return_content: true
+  register: whisparr_root_folders
+
+- name: Create Whisparr root folder if it does not exist
+  when: >
+    (whisparr_root_folders.json
+    | selectattr('path', 'equalto', '/data/media/xxx')
+    | list
+    | length) == 0
+  uri:
+    url: "http://{{ ansible_host }}:6969/api/v3/rootfolder"
+    method: POST
+    headers:
+      X-Api-Key: "{{ whisparr_api_key }}"
+    body_format: json
+    body:
+      path: "/data/media/xxx"
+    status_code: [200, 201]
+    return_content: true
+
+- name: Get existing Whisparr download clients
+  uri:
+    url: "http://{{ ansible_host }}:6969/api/v3/downloadclient"
+    method: GET
+    headers:
+      X-Api-Key: "{{ whisparr_api_key }}"
+    return_content: true
+  register: whisparr_downloadclients
+
+- name: Create qBittorrent download client in Whisparr if missing
+  when: >
+    (whisparr_downloadclients.json
+      | selectattr('implementation', 'equalto', 'QBittorrent')
+      | list
+      | length) == 0
+  uri:
+    url: "http://{{ ansible_host }}:6969/api/v3/downloadclient"
+    method: POST
+    headers:
+      X-Api-Key: "{{ whisparr_api_key }}"
+    body_format: json
+    body:
+      name: "qBittorrent"
+      enable: true
+      protocol: "torrent"
+      priority: 1
+      removeCompletedDownloads: false
+      removeFailedDownloads: true
+      fields:
+        - name: "host"
+          value: "gluetun"
+        - name: "port"
+          value: 8088
+        - name: "useSsl"
+          value: false
+      implementationName: "qBittorrent"
+      implementation: "QBittorrent"
+      configContract: "QBittorrentSettings"
+    status_code: [200, 201]
+    return_content: true

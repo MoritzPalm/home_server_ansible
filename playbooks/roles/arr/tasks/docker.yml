@@ -5,9 +5,10 @@
     group: docker
     mode: "0640"
     content: |
+      HOST_IP={{ host_ip }}
       CONFIG_PATH={{ config_path }}
       MEDIA_PATH={{ media_path }}
-      STORAGE_DIR={{ storage_dir }}
+      STORAGE_PATH={{ storage_path }}
       OPENVPN_USERNAME={{ openvpn_username }}
       OPENVPN_PASSWORD={{ openvpn_password }}
       TORRENT_PATH={{ torrent_path }}
@@ -15,6 +16,7 @@
       ABR_USERNAME={{ abr_username }}
       ABR_PASSWORD={{ abr_password }}
       SOULSEEK_PATH={{ soulseek_path }}
+      SLSKD_UMASK=0022
 
 - name: create yml config file for soulseek
   copy:
@@ -23,11 +25,8 @@
     group: 1000
     mode: "0640"
     content: |
-      remote_configuration: true
+      remote_configuration: false
       headless: false # change this as soon as soularr works
-      permissions:
-        file:
-          mode: 644
       directories:
         downloads: /downloads/complete
         incomplete: /downloads/incomplete
@@ -48,53 +47,6 @@
               key: {{ slskd_api_key }}
               #cidr: 129.168.178.0/24
       
-
-
-- name: create config file for soularr
-  copy:
-    dest: "{{ config_path }}/soularr/config.ini"
-    owner: root
-    group: docker
-    mode: "0640"
-    content: |
-      [Lidarr]
-      api_key = {{ lidarr_api_key }}
-      host_url = http://lidarr:8686
-      download_dir = /downloads/complete 
-      disable_sync = False
-      [Slskd]
-      api_key = {{ slskd_api_key }}
-      host_url = http://gluetun:5030
-      url_base = /
-      download_dir = /downloads
-      delete_searches = False
-      stalled_timeout = 3600
-      [Release Settings]
-      use_most_common_tracknum = True
-      allow_multi_disc = True
-      accepted_countries = Europe,Japan,United Kingdom,United States,[Worldwide],Australia,Canada
-      accepted_format = CD,Digital Media,Vinyl
-      [Search Settings]
-      search_timeout = 5000
-      maximum_peer_queue = 50
-      minimum_peer_upload_speed = 0
-      minimum_filename_match_ration = 0.8
-      # preferred filetypes (most to least preferred)
-      allowed_filetypes = flac24/192,flac 16/44,flac,mp3 320,mp3
-      ignored_users=
-      search_for_tracks = True
-      album_prepend_artist = True
-      track_prepent_artist = True
-      search_type = incrementing_page
-      number_of_albums_to_grab = 10
-      remove_wanted_on_failure = False
-      search_source = missing
-      [Logging]
-      level = INFO
-      format = [%(levelname)s|%(module)s|L%(lineno)d] %(asctime)s: %(message)s
-      datefmt = %Y-%m-%dT%H:%M:%S%z
-
-
 
 - name: run arr compose file
   community.docker.docker_compose_v2:

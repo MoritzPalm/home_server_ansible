@@ -9,7 +9,7 @@
   "tidal": {
     "client_id": "{{ soulsync_tidal_client_id }}",
     "client_secret": "{{ soulsync_tidal_client_secret }}",
-    "redirect_uri": "http://{{ ansible_host }}:8889/tidal/callback"
+    "redirect_uri": "http://{{ host_ip }}:8889/tidal/callback"
   },
 {% endif %}
   "plex": {

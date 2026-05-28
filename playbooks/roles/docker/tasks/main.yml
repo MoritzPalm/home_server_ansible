@@ -35,6 +35,7 @@
     group: docker
     mode: "0640"
     content: |
+      HOST_IP={{ host_ip }}
       ADMIN_PASSWORD_FILE={{ compose_root }}/portainer/admin_password.txt
       PORTAINER_LICENSE_KEY={{ portainer_license_key }}
 

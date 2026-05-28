@@ -9,22 +9,17 @@ media_path: /mnt/storage/media
 torrent_path: /mnt/storage/downloads/torrents
 downloads_path: /mnt/storage/downloads
 soulseek_path: /mnt/storage/downloads/soulseek
-storage_dir: /mnt/storage
+storage_path: /mnt/storage
+backup_path: /mnt/backups
 log_dir: /srv/logs
 
-mergerfs_default_opts: "direct_io,defaults,allow_other,minfreespace=50G,fsname=mergerfs,category.create=mfs,nonempty,dropcacheonclose=true,cache.files=auto-full,func.getattr=newest,moveonenospc=true"
-
-ssd_dirs: 
+ssd_dirs:
   - "/srv/compose"
   - "/srv/data/configs"
   - "/srv/data/db"
   - "/srv/data/cache"
   - "/srv/logs"
-pool_dirs: 
-  - "/media/storage/media"
-  - "/media/storage/downloads"
-  - "/media/storage/backups"
 
-tailscale_operator: "moritzpalm" 
+tailscale_operator: "moritzpalm"
 
-plex_url: "192.168.178.174:32401"
+plex_url: "100.78.131.48:32401"

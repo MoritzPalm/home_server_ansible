@@ -35,15 +35,16 @@
   environment:
     TS_AUTHKEY: "{{ tailscale_authkey }}"  # safer than CLI arg
   when: ts_status.rc != 0 or
+        ('Logged out' in (ts_status.stdout | default(''))) or
         ('Logged out' in (ts_status.stderr | default('')))
   register: ts_up
   # "changed" only when tailscale actually accepts the command
   changed_when: ts_up.rc == 0
   failed_when: ts_up.rc != 0
-#  no_log: true
+  no_log: true
 
 
-- name: check current tailscale funnel status
+- name: Check current tailscale funnel status
   ansible.builtin.command: tailscale funnel status
   register: funnel_status
   changed_when: false
@@ -51,8 +52,9 @@
   tags:
     - tailscale
 
-- name: run tailscale funnel for overseer
+
+- name: Run tailscale funnel for overseerr (port 5055)
   ansible.builtin.command: tailscale funnel --yes --bg 5055
-  when: "'5055' not in funnel_status.stdout"
+  when: funnel_status.stdout is not regex(':5055(\D|$)')
   tags:
     - tailscale

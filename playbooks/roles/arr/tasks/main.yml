@@ -26,7 +26,7 @@
   ansible.builtin.import_tasks: gluetun.yml
   tags:
     - arr
-    - arr-docker
+    - arr-gluetun
 
 - name: Configure Lidarr
   ansible.builtin.import_tasks: lidarr.yml
@@ -56,7 +56,7 @@
   ansible.builtin.import_tasks: radarr.yml
   tags:
     - arr
-    - arr-sonarr
+    - arr-radarr
 
 - name: Configure slskd
   ansible.builtin.import_tasks: slskd.yml
@@ -75,6 +75,12 @@
   tags:
     - arr
     - arr-whisparr
+
+- name: Configure cross-seed
+  ansible.builtin.import_tasks: cross-seed.yml
+  tags:
+    - arr
+    - arr-cross-seed
 
 
 

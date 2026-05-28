@@ -1,56 +1,18 @@
-- name: Clone Hevy Insights repository
-  ansible.builtin.git:
-    repo: "{{ repo_url }}"
-    dest: "{{ app_dir }}"
-    version:  main
-    force: yes
+- name: Create .env file for fitness stack
+  copy:
+    dest: "{{ compose_root }}/fitness/.env"
+    owner: root
+    group: docker
+    mode: "0640"
+    content: |
+      HOST_IP={{ host_ip }}
+      X_API_KEY="klean_kanteen_insulated"
+      LOG_LEVEL="INFO"
+      RECAPTCHA_SITE_KEY="6LfkQG0jAAAAANTrIkVXKPfSPHyJnt4hYPWqxh0R"
+      COOKIE_SECURE="false"
   tags:
     - hevy
-    - hevy-build
-
-- name: Build backend Docker image
-  community.docker.docker_image:
-    name: casudo/hevy-insights-backend
-    tag: latest
-    source:  build
-    build: 
-      path: "{{ app_dir }}"
-      dockerfile: backend/Dockerfile_backend
-    state: present
-  tags:
-    - hevy
-    - hevy-build
-
-- name: Build frontend Docker image
-  community.docker.docker_image:
-    name: casudo/hevy-insights-frontend
-    tag: latest
-    source:  build
-    build: 
-      path: "{{ app_dir }}"
-      dockerfile: frontend/Dockerfile_frontend
-    state: present
-  tags:
-    - hevy
-    - hevy-build
-
-- name: Update backend image in fitness.yml
-  ansible.builtin.lineinfile:
-    path: "{{ compose_file }}"
-    regexp: '^\s+image:\s+.*hevy-insights-backend.*'
-    line: '    image: casudo/hevy-insights-backend:latest'
-  tags:
-    - hevy
-    - hevy-config
-
-- name: Update frontend image in fitness.yml
-  ansible.builtin.lineinfile:
-    path: "{{ compose_file }}"
-    regexp: '^\s+image:\s+.*hevy-insights-frontend.*'
-    line: '    image: casudo/hevy-insights-frontend:latest'
-  tags:
-    - hevy
-    - hevy-config
+    - hevy-deploy
 
 - name:  Start Hevy Insights with docker-compose
   community.docker.docker_compose_v2:
@@ -65,8 +27,8 @@
   ansible.builtin.uri:
     url: "http://localhost:{{ frontend_port }}"
     status_code: 200
-  register:  result
-  until: result. status == 200
+  register: result
+  until: result.status == 200
   retries: 30
   delay: 2
   tags:

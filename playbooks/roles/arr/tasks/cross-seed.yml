@@ -1,0 +1,63 @@
+- name: Create config directory for cross-seed
+  file:
+    path: "{{ config_path }}/cross-seed"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0750"
+
+- name: Create cross-seed links directory
+  file:
+    path: "{{ storage_path }}/cross-seed"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0775"
+
+- name: Generate cross-seed config.js if missing
+  ansible.builtin.command:
+    cmd: >-
+      docker run --rm
+      --user 1000:1000
+      -v {{ config_path }}/cross-seed:/config
+      ghcr.io/cross-seed/cross-seed:6 gen-config
+    creates: "{{ config_path }}/cross-seed/config.js"
+
+- name: Get Prowlarr indexers
+  uri:
+    url: "http://{{ ansible_host }}:9696/api/v1/indexer"
+    method: GET
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    return_content: true
+  register: prowlarr_indexers
+
+- name: Build cross-seed torznab URL list
+  set_fact:
+    cross_seed_torznab: >-
+      {{ prowlarr_indexers.json
+         | map(attribute='id')
+         | map('string')
+         | map('regex_replace', '^(.+)$',
+               'http://gluetun:9696/\1/api?apikey=' ~ prowlarr_api_key)
+         | list }}
+
+- name: Apply cross-seed config settings
+  ansible.builtin.lineinfile:
+    path: "{{ config_path }}/cross-seed/config.js"
+    regexp: "^    {{ item.key }}: "
+    line: "    {{ item.key }}: {{ item.value | to_json }},"
+  loop:
+    - { key: "torznab", value: "{{ cross_seed_torznab }}" }
+    - { key: "radarr", value: ["http://radarr:7878?apikey={{ radarr_api_key }}"] }
+    - { key: "sonarr", value: ["http://sonarr:8989?apikey={{ sonarr_api_key }}"] }
+    - { key: "torrentClients", value: ["qbittorrent:http://gluetun:8088"] }
+    - { key: "linkDirs", value: ["/data/cross-seed"] }
+  register: cross_seed_config
+
+- name: Restart cross-seed to apply config
+  community.docker.docker_container:
+    name: cross-seed
+    state: started
+    restart: true
+  when: cross_seed_config.changed

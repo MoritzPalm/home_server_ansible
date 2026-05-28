@@ -5,7 +5,7 @@
     group: docker
     mode: "0640"
     content: |
-      HOST_IP={{ ansible_ssh_host }}
+      HOST_IP={{ host_ip }}
       VIKUNJA_PASSWORD={{ vikunja_password }}
       VIKUNJA_JWT_SECRET={{ vikunja_jwt_secret }}
       COMPOSE_ROOT={{ compose_root }}

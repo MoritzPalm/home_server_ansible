@@ -1,11 +1,24 @@
-- name: Create Tandoor directories
+- name: Create Tandoor postgres data directory
   ansible.builtin.file:
     path: "{{ item }}"
-    state:  directory
+    state: directory
+    owner: "70"
+    group: "70"
+    mode: "0700"
+  loop:
+    - "{{ database_dir }}/tandoor"
+    - "{{ database_dir }}/tandoor/pgdata"
+  tags:
+    - kitchen
+
+- name: Create Tandoor media and compose directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
     mode: "0755"
   loop:
-    - "{{ database_dir }}/recipes"
     - "{{ media_path }}/recipes"
+    - "{{ media_path }}/recipes/mediafiles"
     - "{{ compose_root }}/kitchen"
   tags:
     - kitchen
@@ -17,6 +30,7 @@
     group: docker
     mode: "0640"
     content: |
+      HOST_IP={{ host_ip }}
       RECIPES_DB_NAME=recipes
       RECIPES_DB_USER=djangodb
       RECIPES_DB_PASSWORD={{ tandoor_postgres_password }}

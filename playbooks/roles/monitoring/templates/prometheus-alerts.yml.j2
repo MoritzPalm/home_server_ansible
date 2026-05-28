@@ -1,81 +1,178 @@
 {% raw %}
 groups:
-  - name: host_alerts
+
+  - name: host
     interval: 30s
-    rules:  
-      # Host CPU usage
+    rules:
       - alert: HostHighCpuLoad
         expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "Host CPU usage is high ({{ $value }}%)"
-          description: "Host {{ $labels.instance }} CPU usage is above 80%"
-      
-      # Host memory usage
-      - alert: HostOutOfMemory
+          summary: "High CPU ({{ $value | printf \"%.1f\" }}%)"
+          description: "CPU has been above 80% for 5 minutes."
+
+      - alert: HostHighLoad
+        expr: node_load15 / count without(cpu, mode) (node_cpu_seconds_total{mode="idle"}) > 1.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High load average ({{ $value | printf \"%.2f\" }} per core)"
+          description: "15-minute load average per core has been above 1.5 for 10 minutes."
+
+      - alert: HostLowMemory
         expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 10
-        for:   5m
-        labels:  
-          severity: warning
-        annotations:
-          summary:   "Host memory is running low ({{ $value }}% available)"
-          description: "Host {{ $labels.instance }} has less than 10% memory available"
-      
-      # Host disk space
-      - alert: HostOutOfDiskSpace
-        expr:  (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
-        for:  5m
-        labels: 
-          severity: critical
-        annotations:
-          summary:   "Host disk space is low ({{ $value }}% available)"
-          description: "Host {{ $labels.instance }} root filesystem has less than 10% space available"
-  
-  - name: container_alerts
-    interval: 30s
-    rules:
-      # Container high CPU
-      - alert: ContainerHighCpuUsage
-        expr:  rate(container_cpu_usage_seconds_total{name!=""}[5m]) * 100 > 80
-        for:   5m
-        labels:  
-          severity: warning
-        annotations:
-          summary: "Container {{ $labels.name }} CPU usage is high"
-          description: "Container {{ $labels.name }} is using {{ $value }}% CPU"
-      
-      # Container high memory
-      - alert: ContainerHighMemoryUsage
-        expr:  (container_memory_usage_bytes{name!=""} / container_spec_memory_limit_bytes{name!=""}) * 100 > 90
         for: 5m
         labels:
           severity: warning
-        annotations: 
-          summary: "Container {{ $labels.name }} memory usage is high"
-          description: "Container {{ $labels.name }} is using {{ $value }}% of its memory limit"
-      
-      # Container down
-      - alert: ContainerDown
-        expr: time() - container_last_seen{name!=""} > 60
-        for:   2m
-        labels: 
+        annotations:
+          summary: "Low memory ({{ $value | printf \"%.1f\" }}% available)"
+          description: "Less than 10% memory available."
+
+      - alert: HostRootDiskLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 5m
+        labels:
           severity: critical
-        annotations: 
-          summary: "Container {{ $labels.name }} is down"
-          description: "Container {{ $labels.name }} has been down for more than 2 minutes"
-  
-  - name: disk_alerts
+        annotations:
+          summary: "Root disk low ({{ $value | printf \"%.1f\" }}% free)"
+          description: "Root filesystem has less than 10% free."
+
+  - name: storage
     interval: 60s
     rules:
-      # SMART disk failure prediction
-      - alert: SmartDiskFailurePredicted
+      - alert: StorageLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/mnt/storage"} / node_filesystem_size_bytes{mountpoint="/mnt/storage"}) * 100 < 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Media storage low ({{ $value | printf \"%.1f\" }}% free)"
+          description: "/mnt/storage has less than 20% free space."
+
+      - alert: StorageCritical
+        expr: (node_filesystem_avail_bytes{mountpoint="/mnt/storage"} / node_filesystem_size_bytes{mountpoint="/mnt/storage"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Media storage critical ({{ $value | printf \"%.1f\" }}% free)"
+          description: "/mnt/storage has less than 10% free space."
+
+      - alert: HddLow
+        expr: (node_filesystem_avail_bytes{mountpoint=~"/mnt/hdd[0-9]+"} / node_filesystem_size_bytes{mountpoint=~"/mnt/hdd[0-9]+"}) * 100 < 15
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HDD {{ $labels.mountpoint }} low ({{ $value | printf \"%.1f\" }}% free)"
+          description: "Individual HDD {{ $labels.mountpoint }} has less than 15% free. mergerfs may be routing all writes to one disk."
+
+      - alert: BackupStorageLow
+        expr: node_filesystem_avail_bytes{mountpoint="/mnt/backups"} < 50 * 1024 * 1024 * 1024
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Backup storage low ({{ $value | humanize1024 }}B free)"
+          description: "Less than 50 GB remains in the backup destination. Incoming backups may start failing."
+
+      - alert: BackupStorageCritical
+        expr: node_filesystem_avail_bytes{mountpoint="/mnt/backups"} < 20 * 1024 * 1024 * 1024
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backup storage critical ({{ $value | humanize1024 }}B free)"
+          description: "Less than 20 GB remains in the backup destination. Backups are likely failing."
+
+      - alert: SsdConfigLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SSD (configs/db) low ({{ $value | printf \"%.1f\" }}% free)"
+          description: "Root filesystem (configs, databases, logs) has less than 20% free. Backups or logs may be growing."
+
+      - alert: SmartDiskUnhealthy
         expr: smartctl_device_smart_healthy == 0
         for: 5m
         labels:
           severity: critical
-        annotations: 
-          summary:  "SMART predicts disk failure on {{ $labels.device }}"
-          description: "Disk {{ $labels.device }} is showing signs of failure"
+        annotations:
+          summary: "Disk {{ $labels.device }} SMART unhealthy"
+          description: "SMART reports {{ $labels.device }} ({{ $labels.model_name }}) is not healthy."
+
+      - alert: SmartDiskHighTemp
+        expr: smartctl_device_temperature{temperature_type="current"} > 55
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk {{ $labels.device }} hot ({{ $value }}°C)"
+          description: "Disk {{ $labels.device }} has been above 55°C for 10 minutes."
+
+  - name: containers
+    interval: 30s
+    rules:
+      - alert: ContainerDown
+        expr: time() - container_last_seen{name!="", name!~".*POD.*"} > 90
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container {{ $labels.name }} down"
+          description: "Container {{ $labels.name }} has not been seen for more than 2 minutes."
+
+      - alert: ContainerHighCpu
+        expr: rate(container_cpu_usage_seconds_total{name!="", name!~".*POD.*"}[5m]) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} high CPU ({{ $value | printf \"%.1f\" }}%)"
+          description: "Container {{ $labels.name }} has been using more than 80% CPU for 5 minutes."
+
+      - alert: ContainerHighMemory
+        expr: >
+          (container_memory_usage_bytes{name!="", name!~".*POD.*"}
+          / container_spec_memory_limit_bytes{name!="", name!~".*POD.*"} > 0) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} high memory ({{ $value | printf \"%.1f\" }}%)"
+          description: "Container {{ $labels.name }} is using more than 90% of its memory limit."
+
+      - alert: ContainerOomKilled
+        expr: increase(container_oom_events_total{name!=""}[5m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container {{ $labels.name }} OOM killed"
+          description: "Container {{ $labels.name }} was killed by the OOM killer."
+
+  - name: services
+    interval: 60s
+    rules:
+      - alert: PrometheusTargetDown
+        expr: up == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Scrape target {{ $labels.job }} is down"
+          description: "Prometheus cannot reach {{ $labels.job }} ({{ $labels.instance }})."
+
+      - alert: AlertmanagerNotificationsFailing
+        expr: increase(alertmanager_notifications_failed_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alertmanager notifications failing ({{ $labels.integration }})"
+          description: "Alertmanager is failing to send {{ $labels.integration }} notifications."
 {% endraw %}

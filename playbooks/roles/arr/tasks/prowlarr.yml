@@ -6,6 +6,18 @@
     group: 1000
     mode: "0750"
 
+- name: Wait for *arr config.xml files to be written
+  ansible.builtin.wait_for:
+    path: "{{ item }}"
+    state: present
+    timeout: 120
+  loop:
+    - "{{ config_path }}/radarr/config.xml"
+    - "{{ config_path }}/sonarr/config.xml"
+    - "{{ config_path }}/prowlarr/config.xml"
+    - "{{ config_path }}/whisparr/config.xml"
+    - "{{ config_path }}/bookshelf/config.xml"
+
 - name: Read Radarr config
   slurp:
     src: "{{ config_path }}/radarr/config.xml"
@@ -18,7 +30,7 @@
 
 - name: Read Prowlarr config
   slurp:
-      src: "{{ config_path }}/prowlarr/config.xml"
+    src: "{{ config_path }}/prowlarr/config.xml"
   register: prowlarr_config
 
 - name: Read Whisparr config
@@ -94,7 +106,7 @@
 
 - name: Wait for Prowlarr to be up
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/prowlarr/ping"
+    url: "http://{{ ansible_host }}:9696/ping"
     method: GET
     status_code: 200
   register: prowlarr_ping
@@ -104,7 +116,7 @@
 
 - name: Get existing Prowlarr applications
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/applications"
+    url: "http://{{ ansible_host }}:9696/api/v1/applications"
     method: GET
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -226,7 +238,7 @@
 - name: Create Sonarr app in Prowlarr if it does not exist
   when: prowlarr_sonarr_id == ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/applications"
+    url: "http://{{ ansible_host }}:9696/api/v1/applications"
     method: POST
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -235,12 +247,11 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_sonarr_create
-  ignore_errors: true
 
 - name: Create Radarr app in Prowlarr if it does not exist
   when: prowlarr_radarr_id == ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/applications"
+    url: "http://{{ ansible_host }}:9696/api/v1/applications"
     method: POST
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -249,12 +260,11 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_radarr_create
-  ignore_errors: true
 
 - name: Create Whisparr app in Prowlarr if it does not exist
   when: prowlarr_whisparr_id == ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/applications"
+    url: "http://{{ ansible_host }}:9696/api/v1/applications"
     method: POST
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -263,12 +273,11 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_whisparr_create
-  ignore_errors: true
 
 - name: Create Bookshelf app in Prowlarr if it does not exist
   when: prowlarr_bookshelf_id == ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/applications"
+    url: "http://{{ ansible_host }}:9696/api/v1/applications"
     method: POST
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -277,7 +286,6 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_bookshelf_create
-  ignore_errors: true
 
 
 # update if existing 
@@ -305,7 +313,7 @@
 - name: Update existing Sonarr app in Prowlarr
   when: prowlarr_sonarr_id != ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/applications/{{ prowlarr_sonarr_id }}"
+    url: "http://{{ ansible_host }}:9696/api/v1/applications/{{ prowlarr_sonarr_id }}"
     method: PUT
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -314,12 +322,11 @@
     status_code: [200, 201, 202]
     return_content: true
   register: prowlarr_sonarr_update
-  ignore_errors: true
 
 - name: Update existing Radarr app in Prowlarr
   when: prowlarr_radarr_id != ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/applications/{{ prowlarr_radarr_id }}"
+    url: "http://{{ ansible_host }}:9696/api/v1/applications/{{ prowlarr_radarr_id }}"
     method: PUT
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -328,12 +335,11 @@
     status_code: [200, 201, 202]
     return_content: true
   register: prowlarr_radarr_update
-  ignore_errors: true
 
 - name: Update existing Whisparr app in Prowlarr
   when: prowlarr_whisparr_id != ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/applications/{{ prowlarr_whisparr_id }}"
+    url: "http://{{ ansible_host }}:9696/api/v1/applications/{{ prowlarr_whisparr_id }}"
     method: PUT
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -342,12 +348,11 @@
     status_code: [200, 201, 202]
     return_content: true
   register: prowlarr_whisparr_update
-  ignore_errors: true
 
 - name: Update existing Bookshelf app
   when: prowlarr_bookshelf_id != ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:8787/api/v1/applications/{{ prowlarr_bookshelf_id }}"
+    url: "http://{{ ansible_host }}:9696/api/v1/applications/{{ prowlarr_bookshelf_id }}"
     method: PUT
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -356,12 +361,11 @@
     status_code: [200, 201, 202]
     return_content: true
   register: prowlarr_bookshelf_update
-  ignore_errors: true
 
 
 - name: Get existing download clients (if any)
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/downloadclient"
+    url: "http://{{ ansible_host }}:9696/api/v1/downloadclient"
     method: GET
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -392,10 +396,6 @@
           value: 8088
         - name: "useSsl"
           value: false
-        - name: "username"
-          value: "{{ qbittorrent_username }}"
-        - name: "password"
-          value: "{{ qbittorrent_password }}"
         - name: "urlBase"
           value: ""
         - name: "category"
@@ -423,7 +423,7 @@
      | list
      | length) == 0
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/downloadclient"
+    url: "http://{{ ansible_host }}:9696/api/v1/downloadclient"
     method: POST
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -432,13 +432,12 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_qbittorrent_create
-  ignore_errors: true
 
 
 # adding indexers
 - name: Get list of indexers already present
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer"
+    url: "http://{{ ansible_host }}:9696/api/v1/indexer"
     method: GET
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -450,7 +449,7 @@
     prowlarr_1337x_id: >-
       {{
         (prowlarr_indexers.json
-         | selectattr('definitionName', 'contains', '1337x')
+         | selectattr('name', 'equalto', '1337x')
          | map(attribute='id')
          | list
          | first)
@@ -459,7 +458,7 @@
     prowlarr_eztv_id: >-
       {{
         (prowlarr_indexers.json
-         | selectattr('definitionName', 'contains', 'eztv')
+         | selectattr('name', 'equalto', 'EZTV')
          | map(attribute='id')
          | list
          | first)
@@ -468,7 +467,7 @@
     prowlarr_mam_id: >-
       {{
         (prowlarr_indexers.json
-         | selectattr('definitionName', 'contains', 'MyAnonamouse')
+         | selectattr('name', 'equalto', 'MyAnonamouse')
          | map(attribute='id')
          | list
          | first)
@@ -477,16 +476,16 @@
     prowlarr_mam_fl_id: >-
       {{
         (prowlarr_indexers.json
-        | selectattr('definitionName', 'contains', 'MyAnonamouse Freeleech')
-        | map(attribute='id')
-        | list
-        | first)
+         | selectattr('name', 'equalto', 'MyAnonamouse Freeleech')
+         | map(attribute='id')
+         | list
+         | first)
         | default('', true)
       }}
     prowlarr_torrentleech_id: >-
       {{
         (prowlarr_indexers.json
-         | selectattr('definitionName', 'contains', 'torrentleech')
+         | selectattr('name', 'equalto', 'TorrentLeech Freeleech')
          | map(attribute='id')
          | list
          | first)
@@ -605,13 +604,9 @@
     prowlarr_torrentleech_body_update: "{{ prowlarr_torrentleech_body | combine({'id': prowlarr_torrentleech_id}) }}"
 
 - name: Create 1337x Indexer if it does not exist
-  when: >
-    (prowlarr_indexers.json 
-    | selectattr('definitionName', 'contains', '1337x') 
-    | list 
-    | length) == 0
+  when: prowlarr_1337x_id == ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer"
+    url: "http://{{ ansible_host }}:9696/api/v1/indexer"
     method: POST
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -620,16 +615,11 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_1337x_create
-  ignore_errors: true
 
 - name: Create EZTV Indexer if it does not exists
-  when: >
-    (prowlarr_indexers.json 
-    | selectattr('definitionName', 'contains', 'eztv') 
-    | list 
-    | length) == 0
+  when: prowlarr_eztv_id == ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer"
+    url: "http://{{ ansible_host }}:9696/api/v1/indexer"
     method: POST
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -637,17 +627,12 @@
     body: "{{ prowlarr_eztv_body }}"
     status_code: [200, 201]
     return_content: true
-  register: prowlarr_eztv_create 
-  ignore_errors: true
+  register: prowlarr_eztv_create
 
 - name: Create MyAnonamouse Freeleech Indexer if it does not exist
-  when: >
-    (prowlarr_indexers.json 
-    | selectattr('definitionName', 'contains', 'MyAnonamouse Freeleech') 
-    | list 
-    | length) == 0
+  when: prowlarr_mam_fl_id == ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer"
+    url: "http://{{ ansible_host }}:9696/api/v1/indexer"
     method: POST
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -656,17 +641,12 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_mam_fl_create
-  ignore_errors: true
 
 
 - name: Create MyAnonamouse Indexer if it does not exist
-  when: >
-    (prowlarr_indexers.json
-    | selectattr('definitionName', 'contains', 'MyAnonamouse')
-    | list
-    | length) == 0
+  when: prowlarr_mam_id == ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer"
+    url: "http://{{ ansible_host }}:9696/api/v1/indexer"
     method: POST
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -675,17 +655,12 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_mam_create
-  ignore_errors: true
 
 
 - name: Create TorrentLeech Freeleech Indexer if it does not exist
-  when: >
-    (prowlarr_indexers.json 
-    | selectattr('definitionName', 'contains', 'torrentleech') 
-    | list 
-    | length) == 0
+  when: prowlarr_torrentleech_id == ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer"
+    url: "http://{{ ansible_host }}:9696/api/v1/indexer"
     method: POST
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
@@ -694,78 +669,72 @@
     status_code: [200, 201]
     return_content: true
   register: prowlarr_torrentleech_create
-  ignore_errors: true
 
 
 - name: Update existing 1337x Indexer if config should be enforced
   when: prowlarr_1337x_id != ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer/{{ prowlarr_1337x_id }}"
+    url: "http://{{ ansible_host }}:9696/api/v1/indexer/{{ prowlarr_1337x_id }}"
     method: PUT
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
     body_format: json
     body: "{{ prowlarr_1337x_body_update }}"
-    status_code: [200, 202]
+    status_code: [200, 202, 400]
     return_content: true
   register: prowlarr_1337x_update
-  ignore_errors: true
 
 - name: Update existing EZTV Indexer if config should be enforced
   when: prowlarr_eztv_id != ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer/{{ prowlarr_eztv_id }}"
+    url: "http://{{ ansible_host }}:9696/api/v1/indexer/{{ prowlarr_eztv_id }}"
     method: PUT
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
     body_format: json
     body: "{{ prowlarr_eztv_body_update }}"
-    status_code: [200, 202]
+    status_code: [200, 202, 400]
     return_content: true
   register: prowlarr_eztv_update
-  ignore_errors: true
 
 - name: Update existing MyAnonamouse Indexer if config should be enforced
   when: prowlarr_mam_id != ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer/{{ prowlarr_mam_id }}"
+    url: "http://{{ ansible_host }}:9696/api/v1/indexer/{{ prowlarr_mam_id }}"
     method: PUT
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
     body_format: json
     body: "{{ prowlarr_mam_body_update }}"
-    status_code: [200, 202]
+    status_code: [200, 202, 400]
     return_content: true
   register: prowlarr_mam_update
-  ignore_errors: true
 
 - name: Update existing MyAnonamouse Freeleech Indexer if config should be enforced
   when: prowlarr_mam_fl_id != ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer/{{ prowlarr_mam_fl_id }}"
+    url: "http://{{ ansible_host }}:9696/api/v1/indexer/{{ prowlarr_mam_fl_id }}"
     method: PUT
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
     body_format: json
     body: "{{ prowlarr_mam_fl_body_update}}"
-    status_code: [200, 201]
+    status_code: [200, 202, 400]
     return_content: true
   register: prowlarr_mam_fl_update
-  ignore_errors: true
 
 - name: Update existing TorrentLeech Indexer if config should be enforced
   when: prowlarr_torrentleech_id != ''
   uri:
-    url: "http://{{ ansible_ssh_host }}:9696/api/v1/indexer/{{ prowlarr_torrentleech_id }}"
+    url: "http://{{ ansible_host }}:9696/api/v1/indexer/{{ prowlarr_torrentleech_id }}"
     method: PUT
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
     body_format: json
     body: "{{ prowlarr_torrentleech_body_update }}"
-    status_code: [200, 202]
+    status_code: [200, 202, 400]
     return_content: true
   register: prowlarr_torrentleech_update
-  ignore_errors: true
 
 
 

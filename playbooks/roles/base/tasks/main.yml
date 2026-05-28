@@ -15,8 +15,14 @@
       PermitRootLogin prohibit-password
       PubkeyAuthentication yes
       ChallengeResponseAuthentication no
+      KbdInteractiveAuthentication no
       UsePAM yes
-    notify: Validate & Restart ssh
+      # TODO: switch to key-based auth in the inventory and set
+      # PasswordAuthentication no here. The ansible controller currently
+      # logs in with vault_ansible_password, so disabling this would
+      # lock us out on the next run.
+      PasswordAuthentication yes
+  notify: Validate & Restart ssh
 
 - name: UFW allow SSH and enable
   ufw: { rule: allow, name: OpenSSH }

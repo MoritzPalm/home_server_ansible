@@ -8,7 +8,7 @@
 
 - name: Wait for Overseerr to be up
   uri:
-    url: "http://{{ ansible_ssh_host }}:5055/api/v1/status"
+    url: "http://{{ ansible_host }}:5055/api/v1/status"
     method: GET
     status_code: 200
   register: overseerr_ping
@@ -16,30 +16,43 @@
   delay: 2
   until: overseerr_ping.status == 200
 
-- name: Read Overseerr config
-  slurp:
-    src: "{{ config_path }}/overseerr/settings.json"
-  register: overseerr_config_raw
+# Overseerr only writes settings.json after the first-time setup wizard.
+- name: Check whether Overseerr has been initialised
+  ansible.builtin.stat:
+    path: "{{ config_path }}/overseerr/settings.json"
+  register: overseerr_settings_stat
 
-- name: Decode Overseerr settings
-  set_fact:
-    overseerr_config: >-
-      {{ overseerr_config_raw.content | b64decode | from_json }}
+- name: Configure Overseerr post-init
+  when: overseerr_settings_stat.stat.exists
+  block:
+    - name: Read Overseerr config
+      ansible.builtin.slurp:
+        src: "{{ config_path }}/overseerr/settings.json"
+      register: overseerr_config_raw
 
+    - name: Decode Overseerr settings
+      ansible.builtin.set_fact:
+        overseerr_config: >-
+          {{ overseerr_config_raw.content | b64decode | from_json }}
 
-- name: Extract Overseer API Key
-  set_fact:
-    overseerr_api_key: "{{ overseerr_config.main.apiKey}}"
+    - name: Extract Overseer API Key
+      ansible.builtin.set_fact:
+        overseerr_api_key: "{{ overseerr_config.main.apiKey }}"
 
+    - name: Login via Plex Token
+      ansible.builtin.uri:
+        url: "http://{{ ansible_host }}:5055/api/v1/auth/plex"
+        method: POST
+        body_format: json
+        body:
+          authToken: "{{ plex_token }}"
+        status_code: 200
+        return_content: true
+      register: overseerr_auth
 
-- name: Login via Plex Token
-  uri:
-    url: "http://{{ ansible_ssh_host }}:5055/api/v1/auth/plex"
-    method: POST
-    body_format: json
-    body:
-      authToken: "{{ plex_token }}"
-    status_code: 200
-    return_content: true
-  register: overseerr_auth
-  ignore_errors: true
+- name: Note that Overseerr needs manual first-time setup
+  ansible.builtin.debug:
+    msg: >-
+      Overseerr settings.json not found at {{ config_path }}/overseerr/settings.json.
+      Complete the web setup wizard at http://{{ ansible_host }}:5055 then re-run this play.
+  when: not overseerr_settings_stat.stat.exists

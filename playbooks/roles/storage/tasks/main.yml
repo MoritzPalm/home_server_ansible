@@ -56,6 +56,28 @@
   changed_when: false
 
 
+- name: Ensure backup directory exists on pool
+  file:
+    path: "{{ storage_path }}/backups"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: "{{ admin_user }}"
+    mode: "0700"
+
+- name: Ensure backup bind mount point exists
+  file:
+    path: /mnt/backups
+    state: directory
+    mode: "0755"
+
+- name: Bind mount backup directory and persist in fstab
+  mount:
+    path: /mnt/backups
+    src: "{{ storage_path }}/backups"
+    fstype: none
+    opts: bind,nofail
+    state: mounted
+
 - name: Create download directories
   file:
     path: "{{ item }}"

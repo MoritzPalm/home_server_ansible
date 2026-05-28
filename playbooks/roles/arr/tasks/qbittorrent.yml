@@ -1,9 +1,9 @@
-- name: Create config directory for qbittorrent 
+- name: Create config directory for qbittorrent
   file:
     path: "{{ config_path }}/qbittorrent"
     state: directory
-    owner: root 
-    group: docker 
+    owner: 1000
+    group: 1000
     mode: "0750"
 
 - name: qBittorrent Configuration Block
@@ -20,6 +20,8 @@
           - { section: "BitTorrent", option: "Session\\DHTEnabled", value: "false" }
           - { section: "Preferences", option: "WebUI\\LocalHostAuth", value: "false" }
           - { section: "Preferences", option: "WebUI\\CSRFProtection", value: "false" }
+          - { section: "Preferences", option: "WebUI\\AuthSubnetWhitelistEnabled", value: "true" }
+          - { section: "Preferences", option: "WebUI\\AuthSubnetWhitelist", value: "172.0.0.0/8" }
 
     - name: Ensure qBittorrent config dir exists
       file:
