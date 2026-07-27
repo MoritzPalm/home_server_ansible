@@ -9,14 +9,27 @@
   tags:
     - docker
 
+# version is parameterised so a feature branch can be deployed for testing with
+#   -e compose_branch=feat/public-ingress
+# and rolled back by simply dropping the flag (default is main). 'force: true'
+# means the flip back is a hard reset, not a merge — no drift to reconcile.
 - name: clone repository containing compose files
   ansible.builtin.git:
     repo: 'https://github.com/MoritzPalm/home_server_compose.git'
     dest: '{{ compose_root }}'
     accept_newhostkey: true
     single_branch: yes
-    version: main
+    version: "{{ compose_branch }}"
     force: true
+  tags:
+    - docker
+
+- name: warn when deploying a non-default compose branch
+  ansible.builtin.debug:
+    msg: >-
+      Deploying compose branch '{{ compose_branch }}' — this is NOT main.
+      Drop '-e compose_branch=...' to return to main.
+  when: compose_branch != 'main'
   tags:
     - docker
 

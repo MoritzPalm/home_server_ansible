@@ -1,6 +1,11 @@
 timezone: Europe/Berlin
 admin_user: moritzpalm
 
+# Branch of home_server_compose deployed to /srv/compose. Override per-run with
+#   -e compose_branch=feat/public-ingress
+# to test a branch; omit the flag to roll back to main.
+compose_branch: main
+
 compose_root: /srv/compose
 config_path: /srv/data/configs
 database_dir: /srv/data/db
@@ -32,3 +37,40 @@ admin_ssh_public_keys:
 tailscale_operator: "moritzpalm"
 
 plex_url: "100.78.131.48:32401"
+
+# --- public ingress -----------------------------------------------------------
+public_domain: moritzpalm.com
+internal_domain: int.moritzpalm.com
+acme_email: moritz.palm@protonmail.com
+
+# Hostnames served through the Cloudflare Tunnel (entrypoint "tunnel", :8443).
+# These are unreachable by hitting the public IP directly — see the entrypoint
+# split in the ingress design.
+tunnel_hosts:
+  homepage: "home.{{ public_domain }}"
+  overseerr: "requests.{{ public_domain }}"
+  vikunja: "tasks.{{ public_domain }}"
+  tandoor: "recipes.{{ public_domain }}"
+  paperless: "docs.{{ public_domain }}"
+  hevy: "fitness.{{ public_domain }}"
+  authentik: "auth.{{ public_domain }}"
+
+# Hostnames served over the directly forwarded :443 (entrypoint "websecure").
+direct_hosts:
+  immich: "photos.{{ public_domain }}"
+
+# Ports allowed inbound from the internet. Everything else is dropped by the
+# firewall role's DOCKER-USER rules.
+#
+# These are CONTAINER ports, not host ports: DOCKER-USER hangs off FORWARD and
+# sees packets after Docker's DNAT has rewritten the destination. Plex is
+# therefore 32400 here even though the host publishes 32401 — writing 32401
+# would look correct and silently never match.
+#
+# Kept EMPTY until the router forwards are actually configured. Uncomment in
+# lockstep with the Fritz!Box forwards + IPv6 pinholes.
+wan_allowed_container_ports: []
+#  - { port: 443, comment: "Traefik websecure (Immich)" }
+#  - { port: 32400, comment: "Plex direct, no proxy" }
+
+paperless_path: /mnt/storage/documents

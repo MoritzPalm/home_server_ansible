@@ -1,0 +1,125 @@
+---
+# Docker's published ports insert their own nat/FORWARD rules and bypass UFW's
+# INPUT chain entirely, so the UFW default-deny in roles/base does NOT protect
+# any container port. DOCKER-USER is the only hook Docker guarantees to preserve
+# and to consult before its own ACCEPT rules, so container ingress policy lives
+# here.
+#
+# IMPORTANT — this host has no separate WAN interface. It sits behind the
+# Fritz!Box NAT on a single NIC, so internet traffic arrives DNAT'd on the *same*
+# interface as LAN traffic. The DROP is therefore only safe because the
+# lan_subnet RETURN precedes it. Reordering these rules would cut off the LAN.
+#
+# DOCKER-USER hangs off FORWARD, so none of this affects host services: sshd,
+# Tailscale and the host itself are on INPUT and cannot be locked out from here.
+# The blast radius of a mistake is "a container is unreachable", not "the box is
+# gone".
+
+- name: Install iptables persistence
+  ansible.builtin.apt:
+    name: iptables-persistent
+    state: present
+  tags: [firewall]
+
+- name: Ensure systemd drop-in dir exists
+  ansible.builtin.file:
+    path: /etc/systemd/system/netfilter-persistent.service.d
+    state: directory
+    mode: "0755"
+  tags: [firewall]
+
+# Docker recreates DOCKER-USER on daemon restart. Ordering netfilter-persistent
+# after docker means the saved rules are replayed once the chain exists again,
+# rather than into a chain Docker is about to clobber.
+- name: Order netfilter-persistent after docker
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/netfilter-persistent.service.d/after-docker.conf
+    mode: "0644"
+    content: |
+      [Unit]
+      After=docker.service
+      Wants=docker.service
+  notify: Reload systemd
+  tags: [firewall]
+
+# Rule order is the security property here, not just style: the lan_subnet /
+# link-local RETURNs must precede the interface DROP, because on this host LAN
+# and internet traffic share one NIC.
+- name: Build desired DOCKER-USER ruleset
+  ansible.builtin.set_fact:
+    docker_user_rules_v4: >-
+      {{ ['-m conntrack --ctstate RELATED,ESTABLISHED -j RETURN',
+          '-i ' ~ tailscale_if ~ ' -j RETURN',
+          '-i lo -j RETURN',
+          '-s ' ~ lan_subnet ~ ' -j RETURN']
+         + wan_port_rules_v4
+         + ['-i ' ~ wan_if ~ ' -j DROP'] }}
+    docker_user_rules_v6: >-
+      {{ ['-m conntrack --ctstate RELATED,ESTABLISHED -j RETURN',
+          '-i ' ~ tailscale_if ~ ' -j RETURN',
+          '-i lo -j RETURN',
+          '-s fe80::/10 -j RETURN',
+          '-s fc00::/7 -j RETURN']
+         + wan_port_rules_v6
+         + ['-i ' ~ wan_if_v6 ~ ' -j DROP'] }}
+  vars:
+    wan_port_rules_v4: "{{ wan_allowed_container_ports
+      | map(attribute='port')
+      | map('string')
+      | map('regex_replace', '^', '-i ' ~ wan_if ~ ' -p tcp --dport ')
+      | map('regex_replace', '$', ' -j RETURN')
+      | list }}"
+    wan_port_rules_v6: "{{ wan_allowed_container_ports
+      | map(attribute='port')
+      | map('string')
+      | map('regex_replace', '^', '-i ' ~ wan_if_v6 ~ ' -p tcp --dport ')
+      | map('regex_replace', '$', ' -j RETURN')
+      | list }}"
+  tags: [firewall]
+
+- name: Read current DOCKER-USER chain
+  ansible.builtin.command: "{{ item.cmd }} -S DOCKER-USER"
+  register: docker_user_current
+  changed_when: false
+  failed_when: false
+  loop:
+    - { cmd: iptables, family: v4 }
+    - { cmd: ip6tables, family: v6 }
+  loop_control:
+    label: "{{ item.family }}"
+  tags: [firewall]
+
+# Flush and rebuild in a single shell invocation so the window where the chain
+# is empty (and therefore permissive) is microseconds rather than one task per
+# rule. Only runs when the chain does not already match, so a converged host is
+# reported unchanged.
+- name: Apply DOCKER-USER ruleset
+  ansible.builtin.shell:
+    cmd: |
+      set -e
+      {{ item.cmd }} -F DOCKER-USER
+      {% for rule in item.rules %}
+      {{ item.cmd }} -A DOCKER-USER {{ rule }}
+      {% endfor %}
+  when:
+    - firewall_docker_user_enabled
+    - (item.current.stdout_lines | default([]) | reject('search', '^-N ') | list)
+      != (item.rules | map('regex_replace', '^(.*)$', '-A DOCKER-USER \\1') | list)
+  loop:
+    - cmd: iptables
+      rules: "{{ docker_user_rules_v4 }}"
+      current: "{{ docker_user_current.results[0] }}"
+    - cmd: ip6tables
+      rules: "{{ docker_user_rules_v6 }}"
+      current: "{{ docker_user_current.results[1] }}"
+  loop_control:
+    label: "{{ item.cmd }}"
+  notify: Persist netfilter rules
+  tags: [firewall]
+
+- name: Tear down DOCKER-USER ruleset (rollback path)
+  ansible.builtin.command: "{{ item }} -F DOCKER-USER"
+  when: not firewall_docker_user_enabled
+  loop: [iptables, ip6tables]
+  notify: Persist netfilter rules
+  tags: [firewall, never]

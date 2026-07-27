@@ -1,0 +1,8 @@
+---
+- name: Reload systemd
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Persist netfilter rules
+  ansible.builtin.command: netfilter-persistent save
+  changed_when: true

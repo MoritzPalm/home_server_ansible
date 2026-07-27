@@ -6,6 +6,10 @@
     - base
     - storage
     - geerlingguy.docker
+    # firewall must follow geerlingguy.docker (the DOCKER-USER chain only exists
+    # once the engine is installed) and precede the docker role, so container
+    # ingress policy is in place before any stack is brought up.
+    - firewall
     - docker
     - homepage
     - arr
