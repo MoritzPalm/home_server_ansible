@@ -1,0 +1,10 @@
+- name: Create config dir for multi-scrobbler
+  file:
+    path: "{{ config_path }}/multi-scrobbler"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: docker
+    mode: "0775"
+  tags:
+    - media
+    - multi-scrobbler

@@ -22,6 +22,12 @@
     - media
     - media-soulsync
 
+- name: Configure multi-scrobbler
+  ansible.builtin.import_tasks: multi_scrobbler.yml
+  tags:
+    - media
+    - media-multi-scrobbler
+
 - name: Create .env file for media stack
   copy:
     dest: "{{ compose_root }}/media/.env"
@@ -45,6 +51,11 @@
       DB_DATABASE_NAME=immich
       DB_DATA_LOCATION={{ database_dir }}/immich
       DB_PASSWORD={{ immich_db_password }}
+      MS_SPOTIFY_CLIENT_ID={{ ms_spotify_client_id }}
+      MS_SPOTIFY_CLIENT_SECRET={{ ms_spotify_client_secret }}
+      MS_PLEX_USER={{ ms_plex_user }}
+      MS_LISTENBRAINZ_TOKEN={{ ms_listenbrainz_token }}
+      MS_LISTENBRAINZ_USER={{ ms_listenbrainz_user }}
   tags:
     - media
 
