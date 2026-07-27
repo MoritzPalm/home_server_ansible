@@ -1,5 +1,7 @@
 app_dir: "{{ cache_dir }}/hevy-insights"
 compose_file: "{{ compose_root }}/fitness/fitness.yml"
 repo_url: https://github.com/casudo/Hevy-Insights.git
-api_key: klean_kanteen_insulated
+# No api_key default here on purpose. It used to fall back to a real key
+# committed in plaintext; hevy_api_key now comes from the vault and the role
+# asserts it is set rather than silently deploying a shared secret.
 frontend_port: 8123

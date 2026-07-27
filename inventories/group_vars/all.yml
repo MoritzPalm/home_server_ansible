@@ -67,10 +67,11 @@ direct_hosts:
 # therefore 32400 here even though the host publishes 32401 — writing 32401
 # would look correct and silently never match.
 #
-# Kept EMPTY until the router forwards are actually configured. Uncomment in
-# lockstep with the Fritz!Box forwards + IPv6 pinholes.
-wan_allowed_container_ports: []
+# Plex is listed from the start because its remote access already works today —
+# an empty list would take a working service down. 443 stays commented until
+# Traefik exists and the Fritz!Box forward + IPv6 pinhole are configured.
+wan_allowed_container_ports:
+  - { port: 32400, comment: "Plex direct, no proxy" }
 #  - { port: 443, comment: "Traefik websecure (Immich)" }
-#  - { port: 32400, comment: "Plex direct, no proxy" }
 
 paperless_path: /mnt/storage/documents

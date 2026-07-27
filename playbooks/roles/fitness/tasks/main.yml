@@ -1,3 +1,16 @@
+- name: Assert Hevy API key is vaulted
+  ansible.builtin.assert:
+    that:
+      - hevy_api_key is defined
+      - hevy_api_key | length > 0
+    fail_msg: >-
+      hevy_api_key is not set. It must come from
+      inventories/host_vars/mserver/vault.yml — the previous plaintext fallback
+      in this role's defaults has been removed.
+  tags:
+    - hevy
+    - hevy-deploy
+
 - name: Create .env file for fitness stack
   copy:
     dest: "{{ compose_root }}/fitness/.env"
@@ -6,7 +19,7 @@
     mode: "0640"
     content: |
       HOST_IP={{ host_ip }}
-      X_API_KEY="{{ hevy_api_key | default(api_key) }}"
+      X_API_KEY="{{ hevy_api_key }}"
       LOG_LEVEL="INFO"
       RECAPTCHA_SITE_KEY="6LfkQG0jAAAAANTrIkVXKPfSPHyJnt4hYPWqxh0R"
       COOKIE_SECURE="false"
@@ -23,9 +36,11 @@
     - hevy
     - hevy-deploy
 
+# Not localhost: the frontend port is bound to the tailnet address only, so
+# 127.0.0.1 no longer answers.
 - name: Wait for frontend to be healthy
   ansible.builtin.uri:
-    url: "http://localhost:{{ frontend_port }}"
+    url: "http://{{ host_ip }}:{{ frontend_port }}"
     status_code: 200
   register: result
   until: result.status == 200
