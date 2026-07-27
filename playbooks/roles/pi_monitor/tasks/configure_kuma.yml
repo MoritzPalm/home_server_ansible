@@ -1,0 +1,55 @@
+- name: Configure Uptime Kuma from the controller
+  delegate_to: localhost
+  become: false
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    kuma_api_url: "http://{{ hostvars[inventory_hostname].ansible_host }}:{{ uptime_kuma_port }}"
+  block:
+
+    - name: Create the Uptime Kuma admin account (fresh install only)
+      lucasheld.uptime_kuma.setup:
+        api_url: "{{ kuma_api_url }}"
+        api_username: "{{ uptime_kuma_admin_user }}"
+        api_password: "{{ uptime_kuma_admin_password }}"
+      register: kuma_setup
+      no_log: true
+      failed_when: false
+
+    - name: Log in to Uptime Kuma
+      lucasheld.uptime_kuma.login:
+        api_url: "{{ kuma_api_url }}"
+        api_username: "{{ uptime_kuma_admin_user }}"
+        api_password: "{{ uptime_kuma_admin_password }}"
+      register: kuma_login
+      no_log: true
+
+    - name: Ensure the Discord notification exists
+      lucasheld.uptime_kuma.notification:
+        api_url: "{{ kuma_api_url }}"
+        api_token: "{{ kuma_login.token }}"
+        name: "Discord"
+        type: "discord"
+        discordWebhookUrl: "{{ discord_webhook_url }}"
+        discordUsername: "Uptime Kuma"
+        isDefault: true
+        applyExisting: true
+        state: present
+      no_log: true
+
+    - name: Ensure a monitor exists for each service
+      lucasheld.uptime_kuma.monitor:
+        api_url: "{{ kuma_api_url }}"
+        api_token: "{{ kuma_login.token }}"
+        name: "{{ item.name }}"
+        type: "http"
+        url: "{{ item.scheme | default('http') }}://{{ monitor_target_ip }}:{{ item.port }}{{ item.path | default('/') }}"
+        interval: "{{ kuma_check_interval | default(60) }}"
+        accepted_statuscodes: "{{ item.accepted_statuscodes | default(['200-299']) }}"
+        ignoreTls: "{{ item.ignore_tls | default(false) }}"
+        notification_names:
+          - "Discord"
+        state: present
+      loop: "{{ monitors }}"
+      loop_control:
+        label: "{{ item.name }}"
+      no_log: true    # avoid leaking the api_token in loop output

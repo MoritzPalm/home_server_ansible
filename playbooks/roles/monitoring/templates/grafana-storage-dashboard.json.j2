@@ -1,6 +1,7 @@
+{% raw %}
 {
   "description": "Free space on the media pool and backup storage",
-  "editable": false,
+  "editable": true,
   "graphTooltip": 1,
   "id": null,
   "links": [],
@@ -260,6 +261,102 @@
       ],
       "title": "Free Space Over Time",
       "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Free space on each mergerfs member disk. Use this to spot imbalance — epmfs routes new writes to the disk with the most free space, but old data can leave members lopsided.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "continuous-GrYlRd"},
+          "min": 0,
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+      "id": 8,
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "showUnfilled": true
+      },
+      "targets": [{
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "expr": "node_filesystem_avail_bytes{mountpoint=~\"/mnt/hdd[0-9]+\"}",
+        "instant": true,
+        "legendFormat": "{{mountpoint}}",
+        "refId": "A"
+      }],
+      "title": "Per-Disk Free (mergerfs members)",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "SMART health per device. OK = drive reports healthy; FAIL means replace the drive.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "FAIL", "color": "red", "index": 0}}},
+            {"type": "value", "options": {"1": {"text": "OK", "color": "green", "index": 1}}}
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+      "id": 9,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "orientation": "auto",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "value_and_name"
+      },
+      "targets": [{
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "expr": "smartctl_device_smart_healthy",
+        "instant": true,
+        "legendFormat": "{{device}}",
+        "refId": "A"
+      }],
+      "title": "SMART Health",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Current temperature per disk. Sustained >55°C triggers the SmartDiskHighTemp alert.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "custom": {"lineWidth": 2, "fillOpacity": 5, "showPoints": "never"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green",  "value": null},
+              {"color": "yellow", "value": 45},
+              {"color": "red",    "value": 55}
+            ]
+          },
+          "unit": "celsius"
+        },
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 28},
+      "id": 10,
+      "options": {
+        "legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right"},
+        "tooltip": {"mode": "multi", "sort": "none"}
+      },
+      "targets": [{
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "expr": "smartctl_device_temperature{temperature_type=\"current\"}",
+        "legendFormat": "{{device}}",
+        "refId": "A"
+      }],
+      "title": "Disk Temperature",
+      "type": "timeseries"
     }
   ],
   "refresh": "5m",
@@ -269,5 +366,6 @@
   "timezone": "browser",
   "title": "Storage Overview",
   "uid": "storage-overview",
-  "version": 1
+  "version": 2
 }
+{% endraw %}

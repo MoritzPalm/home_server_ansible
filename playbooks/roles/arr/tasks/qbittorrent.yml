@@ -11,17 +11,21 @@
     - name: Set qBittorrent variable facts
       set_fact:
         qbittorrent_config_file: "{{ config_path }}/qbittorrent/qBittorrent/qBittorrent.conf"
-        qbt_settings: 
-          - { section: "BitTorrent", option: "Session\\SavePath", value: "/data/downloads/torrents/" }
-          - { section: "BitTorrent", option: "Session\\TempPath", value: "/data/downloads/torrents/incomplete/" }
-          - { section: "BitTorrent", option: "Session\\TempPathEnabled", value: "true" }
-          - { section: "BitTorrent", option: "Session\\LSDEnabled", value: "false" }
-          - { section: "BitTorrent", option: "Session\\PeXEnabled", value: "false" }
-          - { section: "BitTorrent", option: "Session\\DHTEnabled", value: "false" }
+        qbt_bootstrap_settings:
           - { section: "Preferences", option: "WebUI\\LocalHostAuth", value: "false" }
-          - { section: "Preferences", option: "WebUI\\CSRFProtection", value: "false" }
           - { section: "Preferences", option: "WebUI\\AuthSubnetWhitelistEnabled", value: "true" }
-          - { section: "Preferences", option: "WebUI\\AuthSubnetWhitelist", value: "172.0.0.0/8" }
+          - { section: "Preferences", option: "WebUI\\AuthSubnetWhitelist", value: "172.16.0.0/12, 192.168.0.0/20" }
+        qbt_prefs:
+          save_path: "/data/downloads/torrents/"
+          temp_path: "/data/downloads/torrents/incomplete/"
+          temp_path_enabled: true
+          lsd: false
+          pex: false
+          dht: false
+          web_ui_csrf_protection_enabled: true
+          bypass_local_auth: true
+          bypass_auth_subnet_whitelist_enabled: true
+          bypass_auth_subnet_whitelist: "172.16.0.0/12\n192.168.0.0/20"
 
     - name: Ensure qBittorrent config dir exists
       file:
@@ -31,31 +35,31 @@
         group: 1000
         mode: "0775"
 
-    - name: Check if qBittorrent config requires updates
+    - name: Check whether WebUI auth-bypass keys need seeding
       community.general.ini_file:
         path: "{{ qbittorrent_config_file }}"
         section: "{{ item.section }}"
         option: "{{ item.option }}"
         value: "{{ item.value }}"
         create: yes
-      loop: "{{ qbt_settings }}"
+      loop: "{{ qbt_bootstrap_settings }}"
       check_mode: yes
-      register: qbit_config_check
+      register: qbt_bootstrap_check
 
-    - name: Apply changes if required
+    - name: Seed WebUI auth-bypass keys
       block:
-        - name: Check qbittorrent container status
+        - name: Get qbittorrent container status
           community.docker.docker_container_info:
             name: qbittorrent
           register: qbittorrent_info
 
-        - name: Stop qbittorrent to prevent config overwrite
+        - name: Stop qbittorrent so it does not overwrite the seeded config
           community.docker.docker_container:
             name: qbittorrent
             state: stopped
           when: qbittorrent_info.exists and qbittorrent_info.container.State.Running
 
-        - name: Apply qBittorrent Settings
+        - name: Write WebUI auth-bypass keys to config
           community.general.ini_file:
             path: "{{ qbittorrent_config_file }}"
             section: "{{ item.section }}"
@@ -65,12 +69,59 @@
             mode: "0664"
             owner: 1000
             group: 1000
-          loop: "{{ qbt_settings }}"
+          loop: "{{ qbt_bootstrap_settings }}"
 
         - name: Start qbittorrent container
           community.docker.docker_container:
             name: qbittorrent
             state: started
           when: qbittorrent_info.exists
+      when: qbt_bootstrap_check.changed
 
-      when: qbit_config_check.changed
+    - name: Fetch current qbittorrent preferences (waits for the WebUI)
+      community.docker.docker_container_exec:
+        container: gluetun
+        argv:
+          - wget
+          - -q
+          - -O-
+          - http://127.0.0.1:8088/api/v2/app/preferences
+      register: qbt_prefs_raw
+      retries: 30
+      delay: 2
+      until: qbt_prefs_raw.rc == 0 and (qbt_prefs_raw.stdout | default('') | length) > 0
+      failed_when: qbt_prefs_raw.rc != 0
+      changed_when: false
+
+    - name: Parse current preferences
+      set_fact:
+        qbt_current_prefs: "{{ qbt_prefs_raw.stdout | from_json }}"
+
+    - name: Determine which preferences differ from desired
+      set_fact:
+        qbt_prefs_diff: "{{ (qbt_prefs_diff | default([])) + [item.key] }}"
+      loop: "{{ qbt_prefs | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      when: >-
+        (item.key == 'bypass_auth_subnet_whitelist')
+        | ternary(
+            ((item.value | replace(',', ' ')).split() | sort)
+              != ((qbt_current_prefs[item.key] | default('') | replace(',', ' ')).split() | sort),
+            (qbt_current_prefs[item.key] | default(None)) != item.value
+          )
+
+    - name: Apply qbittorrent preferences via WebUI API
+      community.docker.docker_container_exec:
+        container: gluetun
+        argv:
+          - wget
+          - -q
+          - -O-
+          - --post-data
+          - "json={{ qbt_prefs | to_json }}"
+          - http://127.0.0.1:8088/api/v2/app/setPreferences
+      register: qbt_set
+      failed_when: qbt_set.rc != 0
+      changed_when: (qbt_prefs_diff | default([])) | length > 0
+      when: (qbt_prefs_diff | default([])) | length > 0

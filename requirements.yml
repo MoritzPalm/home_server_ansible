@@ -1,2 +1,8 @@
-roles: 
+roles:
   - name: geerlingguy.docker
+
+collections:
+  - name: lucasheld.uptime_kuma
+  - name: ansible.posix        # authorized_key module (base role)
+  - name: community.docker     # docker_compose_v2 / docker_container
+  - name: community.general    # ufw, timezone, ini_file, etc.

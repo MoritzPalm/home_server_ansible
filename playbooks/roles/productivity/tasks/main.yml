@@ -1,3 +1,17 @@
+- name: Create vikunja data directories
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.owner }}"
+    mode: "0750"
+  loop:
+    # postgres:17 runs as uid 999; vikunja app runs as uid 1000
+    - { path: "{{ database_dir }}/vikunja", owner: "999" }
+    - { path: "{{ database_dir }}/vikunja-files", owner: "1000" }
+  tags:
+    - productivity
+
 - name: make .env file for productivity stack
   copy:
     dest: "{{ compose_root }}/productivity/.env"
@@ -6,7 +20,6 @@
     mode: "0640"
     content: |
       HOST_IP={{ host_ip }}
-      VIKUNJA_PASSWORD={{ vikunja_password }}
       VIKUNJA_JWT_SECRET={{ vikunja_jwt_secret }}
       COMPOSE_ROOT={{ compose_root }}
       VIKUNJA_POSTGRES_PASSWORD={{ vikunja_postgres_password }}

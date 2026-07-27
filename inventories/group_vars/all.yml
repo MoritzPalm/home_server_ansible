@@ -6,6 +6,12 @@ config_path: /srv/data/configs
 database_dir: /srv/data/db
 cache_dir: /srv/data/cache
 media_path: /mnt/storage/media
+media_library_dirs:
+  - "{{ media_path }}/movies"
+  - "{{ media_path }}/tv"
+  - "{{ media_path }}/music"
+  - "{{ media_path }}/books"
+  - "{{ media_path }}/xxx"
 torrent_path: /mnt/storage/downloads/torrents
 downloads_path: /mnt/storage/downloads
 soulseek_path: /mnt/storage/downloads/soulseek
@@ -19,6 +25,9 @@ ssd_dirs:
   - "/srv/data/db"
   - "/srv/data/cache"
   - "/srv/logs"
+
+admin_ssh_public_keys:
+  - "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIO4Fe+sdTMI8vP5Ka2gEuzpWfgCf1oTCQ8z1KSLgxR04 moritz.palm@web.de"
 
 tailscale_operator: "moritzpalm"
 

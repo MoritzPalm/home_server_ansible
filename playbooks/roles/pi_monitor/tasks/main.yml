@@ -1,0 +1,101 @@
+- name: Ensure Uptime Kuma compose dir exists
+  ansible.builtin.file:
+    path: "{{ compose_root }}/uptime-kuma"
+    state: directory
+    owner: root
+    group: docker
+    mode: "0755"
+  tags:
+    - pi_monitor
+
+- name: Ensure Uptime Kuma data dir exists
+  ansible.builtin.file:
+    path: "{{ database_dir }}/uptime-kuma"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags:
+    - pi_monitor
+
+- name: Render Uptime Kuma compose file
+  ansible.builtin.template:
+    src: uptime-kuma.yml.j2
+    dest: "{{ compose_root }}/uptime-kuma/uptime-kuma.yml"
+    owner: root
+    group: docker
+    mode: "0644"
+  tags:
+    - pi_monitor
+
+- name: Run Uptime Kuma compose file
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_root }}/uptime-kuma"
+    files: uptime-kuma.yml
+  tags:
+    - pi_monitor
+
+- name: Wait for Uptime Kuma to be up
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ uptime_kuma_port }}/"
+    method: GET
+    status_code: 200
+  register: kuma_health
+  retries: 30
+  delay: 5
+  until: kuma_health.status == 200
+  tags:
+    - pi_monitor
+
+- name: Configure Uptime Kuma monitors and notification
+  ansible.builtin.include_tasks: configure_kuma.yml
+  when: configure_kuma_monitors | default(true)
+  tags:
+    - pi_monitor
+    - kuma_config
+
+- name: Adopt existing systemd Python script into Ansible management
+  when: pi_script.enabled | default(false)
+  tags:
+    - pi_monitor
+    - pi_script
+  block:
+    - name: Install system packages the script relies on (e.g. nmap)
+      ansible.builtin.apt:
+        name: "{{ pi_script.apt_packages }}"
+        state: present
+        update_cache: true
+      when: pi_script.apt_packages is defined
+
+    - name: Install Python deps for the script into its venv
+      ansible.builtin.pip:
+        requirements: "{{ pi_script.requirements }}"
+        virtualenv: "{{ pi_script.venv | default(pi_script.working_dir ~ '/venv') }}"
+        virtualenv_command: python3 -m venv
+      when: pi_script.requirements is defined
+
+    - name: Render the systemd unit for the script
+      ansible.builtin.template:
+        src: script.service.j2
+        dest: "/etc/systemd/system/{{ pi_script.unit_name }}.service"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: reload systemd
+
+    - name: Ensure the script service is enabled and running
+      ansible.builtin.systemd_service:
+        name: "{{ pi_script.unit_name }}.service"
+        enabled: true
+        state: started
+        daemon_reload: true
+
+- name: Ensure existing WireGuard tunnel unit is enabled and running
+  ansible.builtin.systemd_service:
+    name: "wg-quick@{{ pi_wireguard_interface }}.service"
+    enabled: true
+    state: started
+  when: pi_wireguard_interface is defined
+  tags:
+    - pi_monitor
+    - pi_wireguard

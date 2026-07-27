@@ -41,7 +41,7 @@
         authentication:
           disabled: false
           username: slskd
-          password: slskd
+          password: {{ slskd_web_password | default(soulseek_password) }}
           api_keys:
             soularr_api_key:
               key: {{ slskd_api_key }}

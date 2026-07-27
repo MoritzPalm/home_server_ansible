@@ -7,6 +7,29 @@
     state: present
     update_cache: true
 
+- name: Install admin authorized_keys
+  ansible.posix.authorized_key:
+    user: "{{ admin_user }}"
+    key: "{{ item }}"
+    state: present
+  loop: "{{ admin_ssh_public_keys }}"
+
+
+- name: Persist sshd privsep dir across reboots
+  copy:
+    dest: /etc/tmpfiles.d/sshd.conf
+    mode: "0644"
+    content: "d /run/sshd 0755 root root -\n"
+
+- name: Ensure sshd privsep dir exists now
+  file:
+    path: /run/sshd
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Validate & Restart ssh
+
 - name: SSH hardening
   copy:
     dest: /etc/ssh/sshd_config.d/99-hardening.conf
@@ -17,11 +40,7 @@
       ChallengeResponseAuthentication no
       KbdInteractiveAuthentication no
       UsePAM yes
-      # TODO: switch to key-based auth in the inventory and set
-      # PasswordAuthentication no here. The ansible controller currently
-      # logs in with vault_ansible_password, so disabling this would
-      # lock us out on the next run.
-      PasswordAuthentication yes
+      PasswordAuthentication no
   notify: Validate & Restart ssh
 
 - name: UFW allow SSH and enable
@@ -41,6 +60,17 @@
       maxretry = 4
       backend = systemd
   notify: Restart fail2ban
+
+- name: Disable and mask unused Samba services
+  systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+    masked: true
+  loop:
+    - smbd
+    - nmbd
+  failed_when: false
 
 - name: Create compose root
   file: { path: "{{ compose_root }}", state: directory, owner: "{{ admin_user }}", group: docker, mode: "0775" }

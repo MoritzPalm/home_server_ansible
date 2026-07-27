@@ -15,5 +15,32 @@ route:
 receivers:
   - name: discord
     discord_configs:
-      - webhook_url: "https://discord.com/api/webhooks/{{ watchtower_discord_id }}/{{ watchtower_discord_token }}"
+      - webhook_url: "https://discord.com/api/webhooks/{{ alertmanager_discord_id | default(watchtower_discord_id) }}/{{ alertmanager_discord_token | default(watchtower_discord_token) }}"
         send_resolved: true
+
+inhibit_rules:
+  - source_matchers:
+      - severity = critical
+    target_matchers:
+      - severity = warning
+    equal: ['alertname', 'instance']
+  - source_matchers:
+      - alertname = StorageCritical
+    target_matchers:
+      - alertname = StorageLow
+  - source_matchers:
+      - alertname = BackupStorageCritical
+    target_matchers:
+      - alertname = BackupStorageLow
+  # HostRootDiskLow (<10%, critical) and SsdConfigLow (<20%, warning) watch the
+  # same filesystem — only page once when it gets critical
+  - source_matchers:
+      - alertname = HostRootDiskLow
+    target_matchers:
+      - alertname = SsdConfigLow
+  # /mnt/backups is currently a bind mount inside the /mnt/storage pool, so a
+  # critically full pool would otherwise fire the backup alerts too
+  - source_matchers:
+      - alertname = StorageCritical
+    target_matchers:
+      - alertname =~ "BackupStorage(Low|Critical)"

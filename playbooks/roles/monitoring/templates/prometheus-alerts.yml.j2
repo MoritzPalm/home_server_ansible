@@ -115,6 +115,24 @@ groups:
           summary: "Disk {{ $labels.device }} hot ({{ $value }}°C)"
           description: "Disk {{ $labels.device }} has been above 55°C for 10 minutes."
 
+      - alert: MergerfsPoolDegraded
+        expr: count(node_filesystem_size_bytes{mountpoint=~"/mnt/hdd[0-9]+"}) < 2
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "mergerfs pool degraded ({{ $value }} of 2 member disks present)"
+          description: "Fewer than 2 member disks are mounted under /mnt/hdd*. The mergerfs pool may be running on a single disk — risk of missing files or data loss."
+
+      - alert: StorageWillFillUp
+        expr: predict_linear(node_filesystem_avail_bytes{mountpoint="/mnt/storage"}[6h], 4 * 24 * 3600) < 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Media pool projected to fill within ~4 days"
+          description: "Based on the last 6h trend, /mnt/storage is projected to run out of free space within 4 days."
+
   - name: containers
     interval: 30s
     rules:
@@ -127,25 +145,43 @@ groups:
           summary: "Container {{ $labels.name }} down"
           description: "Container {{ $labels.name }} has not been seen for more than 2 minutes."
 
+      # value is normalised to the whole host (100% = all cores), otherwise a
+      # single transcode or ML job crossing one core would page constantly
       - alert: ContainerHighCpu
-        expr: rate(container_cpu_usage_seconds_total{name!="", name!~".*POD.*"}[5m]) * 100 > 80
-        for: 5m
+        expr: rate(container_cpu_usage_seconds_total{name!="", name!~".*POD.*"}[5m]) / scalar(machine_cpu_cores) * 100 > 80
+        for: 15m
         labels:
           severity: warning
         annotations:
-          summary: "Container {{ $labels.name }} high CPU ({{ $value | printf \"%.1f\" }}%)"
-          description: "Container {{ $labels.name }} has been using more than 80% CPU for 5 minutes."
+          summary: "Container {{ $labels.name }} high CPU ({{ $value | printf \"%.1f\" }}% of host)"
+          description: "Container {{ $labels.name }} has been using more than 80% of the host's total CPU for 15 minutes."
 
+      # containers without a memory limit report limit=0 (cgroup v2), and
+      # usage/0 = +Inf in PromQL — the (limit > 0) filter drops those series
+      # instead of firing for every single container. Dormant until containers
+      # get mem_limit set.
       - alert: ContainerHighMemory
         expr: >
           (container_memory_usage_bytes{name!="", name!~".*POD.*"}
-          / container_spec_memory_limit_bytes{name!="", name!~".*POD.*"} > 0) * 100 > 90
+          / (container_spec_memory_limit_bytes{name!="", name!~".*POD.*"} > 0)) * 100 > 90
         for: 5m
         labels:
           severity: warning
         annotations:
           summary: "Container {{ $labels.name }} high memory ({{ $value | printf \"%.1f\" }}%)"
           description: "Container {{ $labels.name }} is using more than 90% of its memory limit."
+
+      # catches runaway containers on a host where nothing has a memory limit
+      - alert: ContainerHighHostMemory
+        expr: >
+          (container_memory_usage_bytes{name!="", name!~".*POD.*"}
+          / on() group_left() machine_memory_bytes) * 100 > 30
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} using {{ $value | printf \"%.1f\" }}% of host RAM"
+          description: "Container {{ $labels.name }} has been using more than 30% of total host memory for 15 minutes."
 
       - alert: ContainerOomKilled
         expr: increase(container_oom_events_total{name!=""}[5m]) > 0
@@ -154,6 +190,19 @@ groups:
         annotations:
           summary: "Container {{ $labels.name }} OOM killed"
           description: "Container {{ $labels.name }} was killed by the OOM killer."
+
+      # each restart produces a NEW series (cAdvisor re-registers the container),
+      # so changes() on one series never counts restarts. Instead, count live
+      # series generations per container name: during a crash loop several
+      # generations coexist within Prometheus' 5m staleness window.
+      - alert: ContainerRestartLoop
+        expr: count by (name) (container_start_time_seconds{name!="", name!~".*POD.*"}) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} restart looping"
+          description: "Container {{ $labels.name }} has restarted repeatedly in the last few minutes."
 
   - name: services
     interval: 60s

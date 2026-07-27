@@ -26,6 +26,7 @@
     mode: "0640"
     content: |
       HOST_IP={{ host_ip }}
+      LAN_IP={{ lan_ip }}
       CONFIG_PATH={{ config_path }}
   tags:
     - homepage

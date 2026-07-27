@@ -108,17 +108,35 @@
     - "{{ soulseek_path }}/complete"
 
 
-- name: Create media directories
+- name: Create media root directory
   file:
-    path: "{{ item }}"
+    path: "{{ media_path }}"
     state: directory
     owner: "{{ admin_user }}"
     group: docker
     mode: "0775"
-  loop:
-    - "{{ media_path }}"
-    - "{{ media_path }}/movies"
-    - "{{ media_path }}/tv"
-    - "{{ media_path }}/music"
-    - "{{ media_path }}/books"
-    - "{{ media_path }}/xxx"
+
+- name: Create media library directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0775"
+  loop: "{{ media_library_dirs }}"
+
+- name: Enforce 1000:1000 ownership inside media libraries
+  command: >-
+    find {{ media_library_dirs | join(' ') }}
+    ( ! -user 1000 -o ! -group 1000 )
+    -print -exec chown 1000:1000 {} +
+  register: media_library_chown
+  changed_when: media_library_chown.stdout | length > 0
+
+- name: Ensure media library directories are owner/group writable
+  command: >-
+    find {{ media_library_dirs | join(' ') }}
+    -type d ! -perm -0770
+    -print -exec chmod ug+rwx {} +
+  register: media_library_chmod
+  changed_when: media_library_chmod.stdout | length > 0

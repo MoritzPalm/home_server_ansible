@@ -1,11 +1,11 @@
 - name: Add Tailscale repo key
   apt_key:
-    url: https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_distribution_release }}.gpg
+    url: "https://pkgs.tailscale.com/stable/{{ ansible_distribution | lower }}/{{ ansible_distribution_release }}.gpg"
     state: present
 
 - name: Add Tailscale repo
   apt_repository:
-    repo: "deb https://pkgs.tailscale.com/stable/ubuntu {{ ansible_distribution_release }} main"
+    repo: "deb https://pkgs.tailscale.com/stable/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} main"
     state: present
 
 - name: Install tailscale
@@ -49,12 +49,15 @@
   register: funnel_status
   changed_when: false
   failed_when: false
+  when: inventory_hostname == 'mserver'
   tags:
     - tailscale
 
 
 - name: Run tailscale funnel for overseerr (port 5055)
   ansible.builtin.command: tailscale funnel --yes --bg 5055
-  when: funnel_status.stdout is not regex(':5055(\D|$)')
+  when:
+    - inventory_hostname == 'mserver'
+    - funnel_status.stdout is not regex(':5055(\D|$)')
   tags:
     - tailscale

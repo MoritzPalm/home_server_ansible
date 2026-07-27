@@ -1,0 +1,70 @@
+tailscale_hostname: "pi-monitor"
+
+tailscale_authkey: "{{ vault_tailscale_authkey_pi }}"
+
+uptime_kuma_port: 3002
+
+configure_kuma_monitors: true
+uptime_kuma_admin_user: "moritzpalm"
+uptime_kuma_admin_password: "{{ vault_uptime_kuma_admin_password }}"  # add to vault.yml
+kuma_check_interval: 60   # seconds between checks
+
+monitor_target_ip: "100.78.131.48"
+discord_webhook_url: "{{ vault_uptime_discord_webhook }}"
+
+# --- Services to probe (host-published ports on mserver) ---
+
+monitors:
+  # Monitoring
+  - { name: "Prometheus",       port: 9090,  path: "/-/healthy" }
+  - { name: "Grafana",          port: 3000,  path: "/api/health" }
+  - { name: "Alertmanager",     port: 9093,  path: "/-/healthy" }
+  - { name: "cAdvisor",         port: 8082,  path: "/healthz" }
+  - { name: "node-exporter",    port: 9100,  path: "/" }
+  - { name: "smartctl-exporter", port: 9902, path: "/" }
+  - { name: "WUD",              port: 3001,  path: "/" }
+  # Media
+  - { name: "Plex",             port: 32401, path: "/identity" }
+  - { name: "Jellyfin",         port: 8096,  path: "/health" }
+  - { name: "Stash",            port: 9999,  path: "/" }
+  - { name: "Immich",           port: 2283,  path: "/api/server/ping" }
+  - { name: "SoulSync",         port: 8008,  path: "/" }
+  # Arr / downloads
+  - { name: "Sonarr",           port: 8989,  path: "/" }
+  - { name: "Radarr",           port: 7878,  path: "/" }
+  - { name: "Lidarr",           port: 8686,  path: "/" }
+  - { name: "Bazarr",           port: 6767,  path: "/" }
+  - { name: "Whisparr",         port: 6969,  path: "/" }
+  - { name: "Overseerr",        port: 5055,  path: "/" }
+  - { name: "Profilarr",        port: 6868,  path: "/" }
+  - { name: "Bookshelf",        port: 8787,  path: "/" }
+  - { name: "AudioBookRequest", port: 8000,  path: "/" }
+  # cross-seed serves no / route (404 "Unknown endpoint"); /api/ping returns 200
+  - { name: "cross-seed",       port: 2468,  path: "/api/ping" }
+  - { name: "Prowlarr",         port: 9696,  path: "/" }
+  - { name: "qBittorrent",      port: 8088,  path: "/" }
+  - { name: "FlareSolverr",     port: 8191,  path: "/" }
+  - { name: "slskd",            port: 5030,  path: "/" }
+  # Apps
+  - { name: "Homepage",         port: 3123,  path: "/" }
+  - { name: "Portainer",        port: 9443,  path: "/", scheme: "https", ignore_tls: true }
+  - { name: "Vikunja",          port: 3456,  path: "/" }
+  - { name: "Tandoor",          port: 9815,  path: "/" }
+  - { name: "Hevy",             port: 8123,  path: "/" }
+
+pi_wireguard_interface: "wg0"
+
+
+pi_script:
+  enabled: true
+  unit_name: "network_watcher"          # -> /etc/systemd/system/network_watcher.service
+  description: "Network Presence Watcher"
+  exec_start: "/home/moritzpalm/network_watcher/.venv/bin/python -u /home/moritzpalm/network_watcher/watcher.py"
+  working_dir: "/home/moritzpalm/network_watcher"
+  run_as: "root"
+  after: "network.target"
+  restart: "always"
+  restart_sec: 10
+  apt_packages:
+    - nmap
+  venv: "/home/moritzpalm/network_watcher/.venv"

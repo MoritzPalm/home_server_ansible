@@ -30,6 +30,7 @@
     owner: "65534"
     group: "65534"
     mode: "0644"
+  notify: Restart prometheus
   tags:
     - monitoring
 
@@ -40,6 +41,7 @@
     owner: "65534"
     group: "65534"
     mode: "0644"
+  notify: Restart prometheus
   tags:
     - monitoring
 
@@ -62,6 +64,7 @@
     owner: "65534"
     group: "65534"
     mode: "0644"
+  notify: Restart alertmanager
   tags:
     - monitoring
 
@@ -94,6 +97,7 @@
     owner: "10001"
     group: "10001"
     mode: "0644"
+  notify: Restart loki
   tags:
     - monitoring
 
@@ -109,6 +113,16 @@
   tags:
     - monitoring
 
+- name: Ensure promtail positions directory exists
+  file:
+    path: "{{ database_dir }}/promtail"
+    state: directory
+    owner: "root"
+    group: "root"
+    mode: "0755"
+  tags:
+    - monitoring
+
 - name: Render promtail config
   template:
     src: promtail.yml.j2
@@ -116,6 +130,7 @@
     owner: "root"
     group: "root"
     mode: "0644"
+  notify: Restart promtail
   tags:
     - monitoring
 
@@ -153,6 +168,7 @@
     owner: "472"
     group: "472"
     mode: "0644"
+  notify: Restart grafana
   tags:
     - monitoring
 
@@ -170,6 +186,26 @@
   template:
     src: grafana-storage-dashboard.json.j2
     dest: "{{ config_path }}/grafana/provisioning/dashboards/storage.json"
+    owner: "472"
+    group: "472"
+    mode: "0644"
+  tags:
+    - monitoring
+
+- name: Render container logs dashboard
+  template:
+    src: grafana-logs-dashboard.json.j2
+    dest: "{{ config_path }}/grafana/provisioning/dashboards/logs.json"
+    owner: "472"
+    group: "472"
+    mode: "0644"
+  tags:
+    - monitoring
+
+- name: Render server overview dashboard
+  template:
+    src: grafana-overview-dashboard.json.j2
+    dest: "{{ config_path }}/grafana/provisioning/dashboards/overview.json"
     owner: "472"
     group: "472"
     mode: "0644"
@@ -201,10 +237,10 @@
   community.docker.docker_compose_v2:
     project_src: "{{ compose_root }}/monitoring"
     files: monitoring.yml
+    remove_orphans: true  # clean up containers removed from the compose file (e.g. watchtower)
   tags:
     - monitoring
 
-# --- Grafana dashboard import ---
 
 - name: Wait for Grafana to be up
   uri:
@@ -215,45 +251,5 @@
   retries: 30
   delay: 5
   until: grafana_health.status == 200
-  tags:
-    - monitoring
-
-- name: Fetch Node Exporter Full dashboard from grafana.com
-  uri:
-    url: "https://grafana.com/api/dashboards/1860/revisions/latest/download"
-    return_content: true
-  register: dashboard_node_exporter
-  tags:
-    - monitoring
-
-- name: Fetch Docker cadvisor dashboard from grafana.com
-  uri:
-    url: "https://grafana.com/api/dashboards/14282/revisions/latest/download"
-    return_content: true
-  register: dashboard_cadvisor
-  tags:
-    - monitoring
-
-- name: Import dashboards into Grafana
-  uri:
-    url: "http://{{ ansible_host }}:3000/api/dashboards/import"
-    method: POST
-    user: "{{ grafana_admin_user }}"
-    password: "{{ grafana_admin_password }}"
-    force_basic_auth: true
-    body_format: json
-    body:
-      overwrite: true
-      folderId: 0
-      inputs:
-        - name: "DS_PROMETHEUS"
-          type: datasource
-          pluginId: prometheus
-          value: Prometheus
-      dashboard: "{{ item }}"
-    status_code: [200]
-  loop:
-    - "{{ dashboard_node_exporter.json }}"
-    - "{{ dashboard_cadvisor.json }}"
   tags:
     - monitoring

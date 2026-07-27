@@ -1,0 +1,7 @@
+
+- hosts: monitor
+  become: true
+  roles:
+    - tailscale 
+    - geerlingguy.docker 
+    - pi_monitor 

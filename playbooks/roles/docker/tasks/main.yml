@@ -39,10 +39,13 @@
       ADMIN_PASSWORD_FILE={{ compose_root }}/portainer/admin_password.txt
       PORTAINER_LICENSE_KEY={{ portainer_license_key }}
 
-- name: Create shared Docker network for media services
+- name: Create shared Docker networks
   community.docker.docker_network:
-    name: media_network
+    name: "{{ item }}"
     state: present
+  loop:
+    - media_network
+    - arr
   tags:
     - docker
     - networking

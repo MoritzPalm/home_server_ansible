@@ -1,0 +1,14 @@
+services:
+
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    volumes:
+      - {{ database_dir }}/uptime-kuma:/app/data
+    ports:
+      # host {{ uptime_kuma_port }} -> container 3001. Reach the UI over Tailscale
+      # at http://{{ tailscale_hostname }}:{{ uptime_kuma_port }} (or the Pi's 100.x IP).
+      - {{ uptime_kuma_port }}:3001
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true

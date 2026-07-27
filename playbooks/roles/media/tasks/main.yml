@@ -27,9 +27,12 @@
     dest: "{{ compose_root }}/media/.env"
     owner: root
     group: docker
-    mode: "0750"
+    mode: "0640"
     content: |
       HOST_IP={{ host_ip }}
+      LAN_IP={{ lan_ip }}
+      PUBLIC_IP={{ public_ip }}
+      PLEX_CLAIM={{ plex_claim }}
       MEDIA_PATH={{ media_path }}
       CONFIG_PATH={{ config_path }}
       DOWNLOADS_PATH={{ downloads_path }}
@@ -37,6 +40,11 @@
       STORAGE_DIR={{ storage_path }}
       DATABASE_DIR={{ database_dir }}
       SOULSEEK_PATH={{ soulseek_path }}
+      UPLOAD_LOCATION={{ media_path }}/photos
+      DB_USERNAME=postgres
+      DB_DATABASE_NAME=immich
+      DB_DATA_LOCATION={{ database_dir }}/immich
+      DB_PASSWORD={{ immich_db_password }}
   tags:
     - media
 

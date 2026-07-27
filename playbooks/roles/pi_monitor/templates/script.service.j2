@@ -1,0 +1,19 @@
+# Managed by Ansible (pi_monitor role). Mirror of the Pi's existing unit —
+# verify against `systemctl cat {{ pi_script.unit_name }}` before first apply.
+[Unit]
+Description={{ pi_script.description }}
+After={{ pi_script.after | default('network-online.target') }}
+{% if pi_script.wants is defined %}
+Wants={{ pi_script.wants }}
+{% endif %}
+
+[Service]
+Type=simple
+User={{ pi_script.run_as }}
+WorkingDirectory={{ pi_script.working_dir }}
+ExecStart={{ pi_script.exec_start }}
+Restart={{ pi_script.restart | default('on-failure') }}
+RestartSec={{ pi_script.restart_sec | default(5) }}
+
+[Install]
+WantedBy=multi-user.target
