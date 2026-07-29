@@ -11,6 +11,5 @@ tailscale_hostname: "mserver"
 tailscale_authkey: "{{ vault_tailscale_authkey }}"
 host_ip: 100.78.131.48
 lan_ip: 192.168.178.35
-public_ip: 130.185.16.42
 
 plex_claim: "{{ vault_plex_claim | default('') }}"

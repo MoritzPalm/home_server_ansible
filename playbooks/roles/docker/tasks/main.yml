@@ -9,6 +9,22 @@
   tags:
     - docker
 
+- name: Check for an existing compose clone
+  ansible.builtin.stat:
+    path: "{{ compose_root }}/.git"
+  register: compose_git
+  tags:
+    - docker
+
+- name: Widen compose clone refspec to all branches
+  ansible.builtin.command:
+    cmd: git config remote.origin.fetch "+refs/heads/*:refs/remotes/origin/*"
+    chdir: "{{ compose_root }}"
+  when: compose_git.stat.exists
+  changed_when: false
+  tags:
+    - docker
+
 # version is parameterised so a feature branch can be deployed for testing with
 #   -e compose_branch=feat/public-ingress
 # and rolled back by simply dropping the flag (default is main). 'force: true'
@@ -18,7 +34,6 @@
     repo: 'https://github.com/MoritzPalm/home_server_compose.git'
     dest: '{{ compose_root }}'
     accept_newhostkey: true
-    single_branch: yes
     version: "{{ compose_branch }}"
     force: true
   tags:

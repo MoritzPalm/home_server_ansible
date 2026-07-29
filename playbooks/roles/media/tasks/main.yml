@@ -37,7 +37,6 @@
     content: |
       HOST_IP={{ host_ip }}
       LAN_IP={{ lan_ip }}
-      PUBLIC_IP={{ public_ip }}
       PLEX_CLAIM={{ plex_claim }}
       MEDIA_PATH={{ media_path }}
       CONFIG_PATH={{ config_path }}
@@ -53,6 +52,7 @@
       DB_PASSWORD={{ immich_db_password }}
       MS_SPOTIFY_CLIENT_ID={{ ms_spotify_client_id }}
       MS_SPOTIFY_CLIENT_SECRET={{ ms_spotify_client_secret }}
+      MS_PLEX_TOKEN={{ plex_token }}
       MS_PLEX_USER={{ ms_plex_user }}
       MS_LISTENBRAINZ_TOKEN={{ ms_listenbrainz_token }}
       MS_LISTENBRAINZ_USER={{ ms_listenbrainz_user }}
