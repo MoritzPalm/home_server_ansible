@@ -15,3 +15,11 @@ lan_ip: 192.168.178.35
 plex_claim: "{{ vault_plex_claim | default('') }}"
 cloudflare_dns_api_token: "{{ vault_cloudflare_dns_api_token }}"
 crowdsec_bouncer_key: "{{ vault_crowdsec_bouncer_key }}"
+
+# Authentik. Generate each with: openssl rand -base64 60 | tr -d '\n'
+# secret_key signs sessions and tokens — rotating it logs everyone out.
+authentik_secret_key: "{{ vault_authentik_secret_key }}"
+authentik_postgres_password: "{{ vault_authentik_postgres_password }}"
+# Bootstrap values are read only on first start, to create the initial admin.
+authentik_bootstrap_password: "{{ vault_authentik_bootstrap_password }}"
+authentik_bootstrap_token: "{{ vault_authentik_bootstrap_token }}"

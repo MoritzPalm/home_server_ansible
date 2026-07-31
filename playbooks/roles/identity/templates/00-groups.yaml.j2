@@ -1,0 +1,25 @@
+---
+# Managed by Ansible (roles/identity) — edits on the host are overwritten.
+#
+# authentik discovers and applies this automatically: it watches the blueprint
+# directory and re-applies on file modification, so writing this file IS the
+# deployment. No API calls, no token.
+#
+# 'admins' is deliberately NOT created here — authentik ships a built-in
+# "authentik Admins" group with is_superuser set, and that is the one your
+# personal account was added to during bootstrap. A second admin group would
+# just be a second thing to keep in sync.
+version: 1
+metadata:
+  name: homeserver-groups
+  labels:
+    blueprints.goauthentik.io/instantiate: "true"
+entries:
+  # Non-privileged group for people who get access to shared services
+  # (Immich, Overseerr, Homepage) but nothing administrative.
+  - model: authentik_core.group
+    state: present
+    identifiers:
+      name: family
+    attrs:
+      is_superuser: false

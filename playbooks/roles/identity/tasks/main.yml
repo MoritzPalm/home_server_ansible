@@ -1,0 +1,99 @@
+---
+- name: Assert authentik secrets are vaulted
+  ansible.builtin.assert:
+    that:
+      - authentik_secret_key is defined
+      - authentik_secret_key | length >= 50
+      - authentik_postgres_password is defined
+      - authentik_postgres_password | length > 0
+      - authentik_bootstrap_password is defined
+      - authentik_bootstrap_password | length > 0
+      - authentik_bootstrap_token is defined
+      - authentik_bootstrap_token | length > 0
+    fail_msg: >-
+      Missing authentik secrets in inventories/host_vars/mserver/vault.yml.
+      Generate each with 'openssl rand -base64 60 | tr -d "\n"':
+      vault_authentik_secret_key (signs sessions and tokens — rotating it logs
+      everyone out and invalidates issued tokens),
+      vault_authentik_postgres_password,
+      vault_authentik_bootstrap_password and vault_authentik_bootstrap_token
+      (consumed only on first start to create the initial admin).
+  tags: [identity]
+
+- name: Create authentik directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: docker
+    mode: "0770"
+  loop:
+    - "{{ config_path }}/authentik/media"
+    - "{{ config_path }}/authentik/templates"
+    - "{{ config_path }}/authentik/blueprints"
+  tags: [identity]
+
+# Created so a typo surfaces here rather than as a silently empty database.
+#
+# Ownership and mode are deliberately NOT managed: initdb chowns this directory
+# to the postgres user (uid 70 in the alpine image) and chmods it 0700, and
+# postgres refuses to start if that is changed. Setting owner/group/mode here
+# would reset it on every playbook run and break an already-initialised
+# database with "could not open file global/pg_filenode.map: Permission denied".
+- name: Create authentik data directory
+  ansible.builtin.file:
+    path: "{{ database_dir }}/authentik"
+    state: directory
+  tags: [identity]
+
+- name: Create .env file for identity stack
+  ansible.builtin.copy:
+    dest: "{{ compose_root }}/identity/.env"
+    owner: root
+    group: docker
+    mode: "0640"
+    content: |
+      CONFIG_PATH={{ config_path }}
+      DATABASE_DIR={{ database_dir }}
+      PUBLIC_DOMAIN={{ public_domain }}
+      INTERNAL_DOMAIN={{ internal_domain }}
+      AUTHENTIK_SECRET_KEY={{ authentik_secret_key }}
+      AUTHENTIK_POSTGRES_PASSWORD={{ authentik_postgres_password }}
+      AUTHENTIK_BOOTSTRAP_PASSWORD={{ authentik_bootstrap_password }}
+      AUTHENTIK_BOOTSTRAP_TOKEN={{ authentik_bootstrap_token }}
+      AUTHENTIK_BOOTSTRAP_EMAIL={{ acme_email }}
+  no_log: true
+  tags: [identity]
+
+# Declarative authentik configuration. authentik watches this directory and
+# applies changes on file write, so templating the file IS the deployment —
+# there is no API call and no token involved. Secrets are injected with the
+# blueprint !Env tag reading container environment, so nothing sensitive is
+# committed.
+- name: Render authentik blueprints
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ config_path }}/authentik/blueprints/{{ item }}"
+    owner: "{{ admin_user }}"
+    group: docker
+    mode: "0640"
+  loop:
+    - 00-groups.yaml
+  tags: [identity]
+
+- name: Run identity compose file
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_root }}/identity"
+    files: identity.yml
+  tags: [identity]
+
+# The database is the only irreplaceable part of this stack: it holds users,
+# groups, providers and application configuration, none of which is in git.
+- name: Verify postgres bind mount resolved (not an anonymous volume)
+  ansible.builtin.command: >-
+    docker inspect authentik_postgres
+    --format '{% raw %}{{ range .Mounts }}{{ .Type }}:{{ .Source }} {{ end }}{% endraw %}'
+  register: authentik_pg_mounts
+  changed_when: false
+  failed_when: database_dir ~ '/authentik' not in authentik_pg_mounts.stdout
+  tags: [identity]

@@ -12,6 +12,7 @@
     - firewall
     - docker
     - networking
+    - identity
     - homepage
     - arr
     - media
