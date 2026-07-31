@@ -1,0 +1,126 @@
+---
+- name: Assert ingress secrets are vaulted
+  ansible.builtin.assert:
+    that:
+      - cloudflare_dns_api_token is defined
+      - cloudflare_dns_api_token | length > 0
+      - crowdsec_bouncer_key is defined
+      - crowdsec_bouncer_key | length > 0
+    fail_msg: >-
+      Missing ingress secrets in inventories/host_vars/mserver/vault.yml.
+      vault_cloudflare_dns_api_token: a Cloudflare API token scoped to
+      Zone:DNS:Edit + Zone:Zone:Read on {{ public_domain }} ONLY (used for the
+      DNS-01 challenge; no inbound port 80 needed).
+      vault_crowdsec_bouncer_key: any long random string you choose, e.g.
+      'openssl rand -hex 32' — it is registered as the Traefik bouncer's API key
+      and shared with the Traefik plugin.
+  tags: [networking]
+
+- name: Create shared ingress docker networks
+  community.docker.docker_network:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - external
+    - internal
+  tags: [networking]
+
+- name: Create traefik directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: docker
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ traefik_config_dir }}", mode: "0750" }
+    - { path: "{{ traefik_config_dir }}/dynamic", mode: "0750" }
+    - { path: "{{ traefik_config_dir }}/acme", mode: "0700" }
+    - { path: "{{ traefik_config_dir }}/secrets", mode: "0700" }
+    - { path: "{{ traefik_log_dir }}", mode: "0750" }
+    - { path: "{{ crowdsec_config_dir }}/config", mode: "0750" }
+    - { path: "{{ crowdsec_config_dir }}/data", mode: "0750" }
+    - { path: "{{ crowdsec_config_dir }}/acquis.d", mode: "0750" }
+  tags: [networking]
+
+- name: Write ingress secret files
+  ansible.builtin.copy:
+    dest: "{{ traefik_config_dir }}/secrets/{{ item.name }}"
+    content: "{{ item.value }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop:
+    - { name: cf_dns_token, value: "{{ cloudflare_dns_api_token }}" }
+    - { name: crowdsec_lapi_key, value: "{{ crowdsec_bouncer_key }}" }
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+  notify: Restart traefik
+  tags: [networking]
+
+- name: Render CrowdSec acquisition config
+  ansible.builtin.template:
+    src: acquis-traefik.yaml.j2
+    dest: "{{ crowdsec_config_dir }}/acquis.d/traefik.yaml"
+    owner: root
+    group: docker
+    mode: "0640"
+  notify: Restart crowdsec
+  tags: [networking]
+
+- name: Render CrowdSec local config overrides
+  ansible.builtin.template:
+    src: crowdsec-config.yaml.local.j2
+    dest: "{{ crowdsec_config_dir }}/config/config.yaml.local"
+    owner: root
+    group: docker
+    mode: "0640"
+  notify: Restart crowdsec
+  tags: [networking]
+
+- name: Render traefik static config
+  ansible.builtin.template:
+    src: traefik.yml.j2
+    dest: "{{ traefik_config_dir }}/traefik.yml"
+    owner: root
+    group: docker
+    mode: "0640"
+  notify: Restart traefik
+  tags: [networking]
+
+- name: Render traefik dynamic config
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "{{ traefik_config_dir }}/dynamic/{{ item }}"
+    owner: root
+    group: docker
+    mode: "0640"
+  loop:
+    - middlewares.yml
+    - tls.yml
+    - routers.yml
+  tags: [networking]
+
+- name: Create .env file for networking stack
+  ansible.builtin.copy:
+    dest: "{{ compose_root }}/networking/.env"
+    owner: root
+    group: docker
+    mode: "0640"
+    content: |
+      HOST_IP={{ host_ip }}
+      LAN_IP={{ lan_ip }}
+      CONFIG_PATH={{ config_path }}
+      LOG_DIR={{ log_dir }}
+      INTERNAL_DOMAIN={{ internal_domain }}
+      CROWDSEC_COLLECTIONS={{ crowdsec_collections | join(' ') }}
+      CROWDSEC_BOUNCER_KEY={{ crowdsec_bouncer_key }}
+  no_log: true
+  tags: [networking]
+
+- name: Run networking compose file
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_root }}/networking"
+    files: networking.yml
+  tags: [networking]

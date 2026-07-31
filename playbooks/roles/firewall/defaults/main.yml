@@ -4,8 +4,6 @@
 wan_if: "{{ ansible_default_ipv4.interface }}"
 wan_if_v6: "{{ (ansible_default_ipv6 | default({})).interface | default(wan_if) }}"
 
-# LAN that is trusted to reach published container ports directly.
-lan_subnet: 192.168.178.0/24
 
 # Tailscale interface — always trusted, this is how Ansible and every admin UI
 # reach the host.

@@ -11,6 +11,7 @@
     # ingress policy is in place before any stack is brought up.
     - firewall
     - docker
+    - networking
     - homepage
     - arr
     - media

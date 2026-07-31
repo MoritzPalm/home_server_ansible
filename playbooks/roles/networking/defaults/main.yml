@@ -1,0 +1,17 @@
+---
+traefik_acme_staging: false
+
+traefik_config_dir: "{{ config_path }}/traefik"
+traefik_log_dir: "{{ log_dir }}/traefik"
+
+# --- CrowdSec ---------------------------------------------------------------
+crowdsec_config_dir: "{{ config_path }}/crowdsec"
+
+crowdsec_collections:
+  - crowdsecurity/traefik
+  - crowdsecurity/http-cve
+  - crowdsecurity/base-http-scenarios
+  - crowdsecurity/appsec-virtual-patching
+  - crowdsecurity/appsec-generic-rules
+
+crowdsec_appsec_enabled: true

@@ -1,0 +1,124 @@
+---
+# Managed by Ansible (roles/networking) — edits on the host are overwritten.
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+entryPoints:
+  # Internal-only entrypoint for the ping healthcheck. Not published to the
+  # host, so it is reachable only from inside the container and by docker's
+  # healthcheck. The dashboard is NOT served here (api.insecure is false).
+  traefik:
+    address: ":8080"
+
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+  # Public entrypoint, reached via the router's port forward. Only hostnames
+  # that must work from any network bind here (Immich in phase 5).
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "{{ public_domain }}"
+            sans:
+              - "*.{{ public_domain }}"
+              - "*.{{ internal_domain }}"
+
+  # Cloudflare Tunnel entrypoint. NOT published to the host — cloudflared
+  # reaches it over the 'external' docker network. Keeping it separate from
+  # websecure is what stops someone who finds the home IP from bypassing
+  # Cloudflare Access by sending a spoofed Host header to :443.
+  tunnel:
+    address: ":8443"
+    http:
+      tls:
+        certResolver: cloudflare
+        domains:
+          - main: "{{ public_domain }}"
+            sans:
+              - "*.{{ public_domain }}"
+              - "*.{{ internal_domain }}"
+
+# Downloaded and compiled by Traefik at startup, so this needs outbound
+# internet and a writable plugin store — do not set read_only on the container.
+experimental:
+  plugins:
+    crowdsec-bouncer-traefik-plugin:
+      moduleName: github.com/maxlerebourg/crowdsec-bouncer-traefik-plugin
+      version: v1.7.0
+
+providers:
+  docker:
+    endpoint: "tcp://dockerproxy:2375"
+    exposedByDefault: false
+    network: external
+    watch: true
+  file:
+    directory: /dynamic
+    watch: true
+
+certificatesResolvers:
+  cloudflare:
+    acme:
+      email: "{{ acme_email }}"
+      storage: /acme/acme.json
+{% if traefik_acme_staging %}
+      # STAGING certificates — browsers will show a warning. This exists so that
+      # iterating on routing does not burn the Let's Encrypt production limit of
+      # 5 duplicate certs per week. Set traefik_acme_staging: false once routing
+      # is proven, then delete acme.json so real certs are issued.
+      caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+{% endif %}
+      dnsChallenge:
+        provider: cloudflare
+        propagation:
+          # Do NOT set disableChecks here. This certificate covers three names,
+          # and moritzpalm.com + *.moritzpalm.com both need their own TXT record
+          # at the SAME _acme-challenge.moritzpalm.com. Skipping the check makes
+          # lego notify ACME the instant it starts writing, so Let's Encrypt
+          # sees one value where two are required, and no record at all for
+          # int. — it failed 12 seconds after starting.
+          #
+          # The check previously misfired because a stale TXT record from an
+          # earlier failed run was still in the zone and got returned instead of
+          # the live value. That record has been removed; the delay gives all
+          # three writes time to land and propagate before verification starts.
+          delayBeforeChecks: 60s
+
+# Dashboard is served through a router (see dynamic/routers.yml) on an internal
+# hostname, never on an unauthenticated port.
+api:
+  dashboard: true
+  insecure: false
+
+ping:
+  entryPoint: traefik
+
+log:
+  level: INFO
+
+# Written to a bind mount shared with CrowdSec in phase 2 — that is the only
+# way CrowdSec can see HTTP traffic, so the format must stay JSON.
+accessLog:
+  filePath: /var/log/traefik/access.log
+  format: json
+  # No bufferingSize. Buffering holds N lines in memory before flushing, which
+  # on a low-traffic home server means CrowdSec parses attacks hours after they
+  # happen — or never, if the buffer never fills. Immediate writes are what make
+  # the detection layer actually work; the write volume here is trivial.
+
+metrics:
+  prometheus:
+    addEntryPointsLabels: true
+    addRoutersLabels: true
+    addServicesLabels: true

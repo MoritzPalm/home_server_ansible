@@ -1,0 +1,20 @@
+---
+# Managed by Ansible (roles/networking) — edits on the host are overwritten.
+tls:
+  options:
+    default:
+      minVersion: VersionTLS12
+      # Reject connections whose SNI matches no configured certificate rather
+      # than falling back to a default cert — this is part of what makes the
+      # tunnel/websecure entrypoint split hold.
+      sniStrict: true
+      cipherSuites:
+        - TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305
+        - TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+        - TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384
+        - TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305
+      curvePreferences:
+        - CurveP256
+        - X25519

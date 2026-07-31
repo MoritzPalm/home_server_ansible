@@ -1,0 +1,60 @@
+---
+# Managed by Ansible (roles/networking) — edits on the host are overwritten.
+http:
+  middlewares:
+
+    secure-headers:
+      headers:
+        stsSeconds: 63072000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        forceSTSHeader: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        frameDeny: true
+        referrerPolicy: strict-origin-when-cross-origin
+        customResponseHeaders:
+          # Don't advertise what we're running.
+          Server: ""
+          X-Powered-By: ""
+
+    ratelimit:
+      rateLimit:
+        average: 50
+        burst: 100
+        period: 1s
+
+    # Queries CrowdSec's local API on every request and rejects IPs with an
+    # active decision. 'live' mode asks per request (accurate, tiny latency);
+    # 'stream' would cache the blocklist instead.
+    crowdsec:
+      plugin:
+        crowdsec-bouncer-traefik-plugin:
+          enabled: true
+          crowdsecMode: live
+          crowdsecLapiHost: crowdsec:8080
+          crowdsecLapiScheme: http
+          # Read from a file so the key never appears in this config or in
+          # 'docker inspect'.
+          crowdsecLapiKeyFile: /run/secrets/crowdsec_lapi_key
+{% if crowdsec_appsec_enabled %}
+          crowdsecAppsecEnabled: true
+          crowdsecAppsecHost: crowdsec:7422
+{% endif %}
+          # Only trust forwarded client IPs from the docker bridge ranges —
+          # otherwise a spoofed X-Forwarded-For would let an attacker evade
+          # their own ban, or get someone else banned.
+          forwardedHeadersTrustedIPs:
+            - 172.16.0.0/12
+          clientTrustedIPs:
+            - {{ lan_subnet | default('192.168.178.0/24') }}
+
+    # Applied to every public router. Order matters: CrowdSec runs first so a
+    # banned IP is rejected before any other work is done. Authentik is added
+    # as a separate chain in phase 3.
+    chain-public:
+      chain:
+        middlewares:
+          - crowdsec@file
+          - secure-headers@file
+          - ratelimit@file

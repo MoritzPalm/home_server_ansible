@@ -1,0 +1,22 @@
+---
+# Managed by Ansible (roles/networking) — edits on the host are overwritten.
+http:
+  routers:
+
+    # Traefik's own dashboard. Bound to 'websecure' but on an *.{{ internal_domain }}
+    # hostname whose DNS resolves to the tailnet address only, so it is not
+    # reachable from the internet even once :443 is forwarded. Authentik is put
+    # in front of it in phase 3.
+    dashboard:
+      rule: "Host(`traefik.{{ internal_domain }}`)"
+      entryPoints:
+        - websecure
+      service: api@internal
+      middlewares:
+        - chain-public@file
+      # No 'tls' key at all, deliberately. The websecure entrypoint defines
+      # http.tls with the certResolver and the wildcard domains, and routers
+      # linked to it inherit that automatically. Specifying tls here — even as
+      # 'tls: {}' — OVERRIDES that default with an empty config, so no resolver
+      # applies and no certificate is ever requested. Naming a certResolver
+      # instead goes the other way: a separate certificate per hostname.

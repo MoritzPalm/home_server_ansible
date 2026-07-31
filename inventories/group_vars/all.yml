@@ -39,6 +39,8 @@ tailscale_operator: "moritzpalm"
 plex_url: "100.78.131.48:32401"
 
 # --- public ingress -----------------------------------------------------------
+lan_subnet: 192.168.178.0/24
+
 public_domain: moritzpalm.com
 internal_domain: int.moritzpalm.com
 acme_email: moritz.palm@protonmail.com

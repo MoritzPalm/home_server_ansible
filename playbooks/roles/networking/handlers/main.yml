@@ -1,0 +1,14 @@
+---
+- name: Restart traefik
+  community.docker.docker_container:
+    name: traefik
+    state: started
+    restart: true
+  failed_when: false
+
+- name: Restart crowdsec
+  community.docker.docker_container:
+    name: crowdsec
+    state: started
+    restart: true
+  failed_when: false

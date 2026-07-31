@@ -54,10 +54,11 @@
     - tailscale
 
 
-- name: Run tailscale funnel for overseerr (port 5055)
-  ansible.builtin.command: tailscale funnel --yes --bg 5055
+- name: Ensure tailscale funnel is off
+  ansible.builtin.command: tailscale funnel --https=443 off
   when:
     - inventory_hostname == 'mserver'
-    - funnel_status.stdout is not regex(':5055(\D|$)')
+    - "'Funnel on' in (funnel_status.stdout | default(''))"
+  changed_when: true
   tags:
     - tailscale
