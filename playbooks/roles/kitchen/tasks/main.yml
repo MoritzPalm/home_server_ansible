@@ -31,11 +31,13 @@
     mode: "0640"
     content: |
       HOST_IP={{ host_ip }}
+      HOST_TANDOOR={{ tunnel_hosts.tandoor }}
+      HOST_AUTHENTIK={{ tunnel_hosts.authentik }}
+      OIDC_TANDOOR_SECRET={{ oidc_tandoor_secret }}
       RECIPES_DB_NAME=recipes
       RECIPES_DB_USER=djangodb
       RECIPES_DB_PASSWORD={{ tandoor_postgres_password }}
       RECIPES_SECRET_KEY={{ tandoor_secret_key }}
-      RECIPES_ALLOWED_HOSTS=*
       CONFIG_PATH={{ config_path }}
       DATABASE_DIR={{ database_dir }}
       MEDIA_PATH={{ media_path }}

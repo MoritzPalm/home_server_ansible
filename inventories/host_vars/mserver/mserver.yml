@@ -23,3 +23,13 @@ authentik_postgres_password: "{{ vault_authentik_postgres_password }}"
 # Bootstrap values are read only on first start, to create the initial admin.
 authentik_bootstrap_password: "{{ vault_authentik_bootstrap_password }}"
 authentik_bootstrap_token: "{{ vault_authentik_bootstrap_token }}"
+
+# Cloudflare Tunnel. Both come from 'cloudflared tunnel create <name>':
+# the UUID it prints, and the entire contents of the credentials JSON it writes.
+cloudflared_tunnel_id: "{{ vault_cloudflared_tunnel_id }}"
+cloudflared_credentials: "{{ vault_cloudflared_credentials }}"
+
+# OIDC client secrets. Shared between authentik (which reads them via the
+# blueprint !Env tag) and each app. Generate with: openssl rand -hex 32
+oidc_vikunja_secret: "{{ vault_oidc_vikunja_secret }}"
+oidc_tandoor_secret: "{{ vault_oidc_tandoor_secret }}"

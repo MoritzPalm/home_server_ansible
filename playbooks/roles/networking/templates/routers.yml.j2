@@ -5,8 +5,12 @@ http:
 
     # Traefik's own dashboard. Bound to 'websecure' but on an *.{{ internal_domain }}
     # hostname whose DNS resolves to the tailnet address only, so it is not
-    # reachable from the internet even once :443 is forwarded. Authentik is put
-    # in front of it in phase 3.
+    # reachable from the internet even once :443 is forwarded.
+    #
+    # No 'tls' key: the websecure entrypoint defines http.tls with the
+    # certResolver and wildcard domains, and routers inherit it. Specifying tls
+    # here — even as 'tls: {}' — overrides that with an empty config and no
+    # certificate is ever requested.
     dashboard:
       rule: "Host(`traefik.{{ internal_domain }}`)"
       entryPoints:
@@ -14,9 +18,38 @@ http:
       service: api@internal
       middlewares:
         - chain-public@file
-      # No 'tls' key at all, deliberately. The websecure entrypoint defines
-      # http.tls with the certResolver and the wildcard domains, and routers
-      # linked to it inherit that automatically. Specifying tls here — even as
-      # 'tls: {}' — OVERRIDES that default with an empty config, so no resolver
-      # applies and no certificate is ever requested. Naming a certResolver
-      # instead goes the other way: a separate certificate per hostname.
+
+    # Catch-all for anything that matches no other router on the public
+    # entrypoint. Without this, unmatched requests never enter a middleware
+    # chain, so they are neither logged nor seen by CrowdSec — meaning someone
+    # scanning the public IP could probe indefinitely without ever being
+    # banned. Lowest possible priority so it never shadows a real router.
+    catchall:
+      rule: "HostRegexp(`^.+$`)"
+      priority: 1
+      entryPoints:
+        - websecure
+      service: noop@internal
+      middlewares:
+        - chain-public@file
+
+{% for host in authentik_forward_auth_hosts | default([]) %}
+    # authentik's embedded outpost handles the login redirect and callback for
+    # {{ host }}. This must be a separate router: the path has to reach
+    # authentik rather than the app, and it must NOT be behind chain-sso or the
+    # login callback would itself require being logged in.
+    outpost-{{ host | replace('.', '-') }}:
+      rule: "Host(`{{ host }}`) && PathPrefix(`/outpost.goauthentik.io/`)"
+      priority: 100
+      entryPoints:
+        - tunnel
+      service: authentik-outpost@file
+      middlewares:
+        - chain-public@file
+{% endfor %}
+
+  services:
+    authentik-outpost:
+      loadBalancer:
+        servers:
+          - url: "http://authentik_server:9000"

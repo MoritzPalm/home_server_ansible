@@ -12,6 +12,43 @@
   tags:
     - productivity
 
+- name: Create vikunja config directory
+  file:
+    path: "{{ config_path }}/vikunja"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: docker
+    mode: "0750"
+  tags:
+    - productivity
+
+- name: Check vikunja config path
+  stat:
+    path: "{{ config_path }}/vikunja/config.yml"
+  register: vikunja_config_path
+  tags:
+    - productivity
+
+- name: Remove vikunja config.yml if docker created it as a directory
+  file:
+    path: "{{ config_path }}/vikunja/config.yml"
+    state: absent
+  when: vikunja_config_path.stat.exists and vikunja_config_path.stat.isdir
+  tags:
+    - productivity
+
+- name: Render vikunja config (declares the OIDC provider)
+  template:
+    src: vikunja-config.yml.j2
+    dest: "{{ config_path }}/vikunja/config.yml"
+    owner: "1000"
+    group: docker
+    mode: "0640"
+  no_log: true
+  notify: Restart vikunja
+  tags:
+    - productivity
+
 - name: make .env file for productivity stack
   copy:
     dest: "{{ compose_root }}/productivity/.env"
@@ -20,6 +57,8 @@
     mode: "0640"
     content: |
       HOST_IP={{ host_ip }}
+      CONFIG_PATH={{ config_path }}
+      HOST_VIKUNJA={{ tunnel_hosts.vikunja }}
       VIKUNJA_JWT_SECRET={{ vikunja_jwt_secret }}
       COMPOSE_ROOT={{ compose_root }}
       VIKUNJA_POSTGRES_PASSWORD={{ vikunja_postgres_password }}
@@ -31,5 +70,21 @@
   community.docker.docker_compose_v2:
     project_src: "{{ compose_root }}/productivity"
     files: productivity.yml
+  tags:
+    - productivity
+
+# The config file is the only thing that enables OIDC; if it is missing or was
+# shadowed by a directory, vikunja starts fine and just has no SSO.
+- name: Verify vikunja loaded the OIDC provider
+  ansible.builtin.uri:
+    url: "http://{{ host_ip }}:3456/api/v1/info"
+    return_content: true
+  register: vikunja_info
+  retries: 15
+  delay: 4
+  until: vikunja_info.status == 200
+  failed_when: >-
+    vikunja_info.status != 200 or
+    not (vikunja_info.json.auth.openid_connect.enabled | default(false))
   tags:
     - productivity

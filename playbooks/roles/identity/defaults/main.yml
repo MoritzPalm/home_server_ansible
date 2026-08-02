@@ -1,0 +1,42 @@
+---
+authentik_proxy_apps:
+  - slug: homepage
+    name: Homepage
+    host: "{{ tunnel_hosts.homepage }}"
+    description: Service dashboard
+    groups:
+      - family
+      - authentik Admins
+  - slug: hevy
+    name: Hevy Insights
+    host: "{{ tunnel_hosts.hevy }}"
+    description: Workout statistics
+    groups:
+      - authentik Admins
+
+# Apps integrated via OIDC rather than forward-auth. Use this for anything with
+# its own login and/or native (non-browser) clients — a mobile app cannot
+# complete a forward-auth redirect, but it can complete an OAuth flow.
+#
+# redirect_uri must match what the app actually calls back to, exactly:
+#   Vikunja  <publicurl>/auth/openid/<provider key from its config file>
+#   Tandoor  <publicurl>/accounts/oidc/<provider_id>/login/callback/
+authentik_oidc_apps:
+  - slug: vikunja
+    name: Vikunja
+    host: "{{ tunnel_hosts.vikunja }}"
+    description: Tasks
+    secret_env: OIDC_VIKUNJA_SECRET
+    redirect_uri: "https://{{ tunnel_hosts.vikunja }}/auth/openid/authentik"
+    groups:
+      - family
+      - authentik Admins
+  - slug: tandoor
+    name: Tandoor
+    host: "{{ tunnel_hosts.tandoor }}"
+    description: Recipes
+    secret_env: OIDC_TANDOOR_SECRET
+    redirect_uri: "https://{{ tunnel_hosts.tandoor }}/accounts/oidc/authentik/login/callback/"
+    groups:
+      - family
+      - authentik Admins

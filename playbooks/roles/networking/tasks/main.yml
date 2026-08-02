@@ -6,6 +6,10 @@
       - cloudflare_dns_api_token | length > 0
       - crowdsec_bouncer_key is defined
       - crowdsec_bouncer_key | length > 0
+      - cloudflared_tunnel_id is defined
+      - cloudflared_tunnel_id | length > 0
+      - cloudflared_credentials is defined
+      - cloudflared_credentials | length > 0
     fail_msg: >-
       Missing ingress secrets in inventories/host_vars/mserver/vault.yml.
       vault_cloudflare_dns_api_token: a Cloudflare API token scoped to
@@ -14,6 +18,9 @@
       vault_crowdsec_bouncer_key: any long random string you choose, e.g.
       'openssl rand -hex 32' — it is registered as the Traefik bouncer's API key
       and shared with the Traefik plugin.
+      vault_cloudflared_tunnel_id and vault_cloudflared_credentials: from
+      'cloudflared tunnel create <name>' — the UUID it prints, and the full
+      contents of the credentials JSON file it writes.
   tags: [networking]
 
 - name: Create shared ingress docker networks
@@ -29,7 +36,7 @@
   ansible.builtin.file:
     path: "{{ item.path }}"
     state: directory
-    owner: root
+    owner: "{{ item.owner | default('root') }}"
     group: docker
     mode: "{{ item.mode }}"
   loop:
@@ -41,6 +48,9 @@
     - { path: "{{ crowdsec_config_dir }}/config", mode: "0750" }
     - { path: "{{ crowdsec_config_dir }}/data", mode: "0750" }
     - { path: "{{ crowdsec_config_dir }}/acquis.d", mode: "0750" }
+    # 65532 is the nonroot uid cloudflared runs as; it must be able to read its
+    # own credentials.
+    - { path: "{{ config_path }}/cloudflared", mode: "0750", owner: "65532" }
   tags: [networking]
 
 - name: Write ingress secret files
@@ -57,6 +67,27 @@
     label: "{{ item.name }}"
   no_log: true
   notify: Restart traefik
+  tags: [networking]
+
+- name: Write cloudflared tunnel credentials
+  ansible.builtin.copy:
+    dest: "{{ config_path }}/cloudflared/credentials.json"
+    content: "{{ cloudflared_credentials }}"
+    owner: "65532"
+    group: docker
+    mode: "0400"
+  no_log: true
+  notify: Restart cloudflared
+  tags: [networking]
+
+- name: Render cloudflared tunnel config
+  ansible.builtin.template:
+    src: cloudflared-config.yml.j2
+    dest: "{{ config_path }}/cloudflared/config.yml"
+    owner: "65532"
+    group: docker
+    mode: "0440"
+  notify: Restart cloudflared
   tags: [networking]
 
 - name: Render CrowdSec acquisition config

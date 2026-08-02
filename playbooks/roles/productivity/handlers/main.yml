@@ -1,0 +1,7 @@
+---
+- name: Restart vikunja
+  community.docker.docker_container:
+    name: vikunja
+    state: started
+    restart: true
+  failed_when: false

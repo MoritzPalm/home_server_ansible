@@ -1,0 +1,29 @@
+---
+# Managed by Ansible (roles/productivity) — edits on the host are overwritten.
+#
+# This file exists purely to declare the OpenID provider. Vikunja will not read
+# VIKUNJA_AUTH_OPENID_PROVIDERS_* environment variables for a provider it does
+# not already know about, so the provider key has to appear in a config file
+# first — env vars alone silently do nothing.
+#
+# Everything else (database, public URL) stays in the stack's .env: environment
+# variables take precedence over this file, so the two do not fight.
+auth:
+  # Keep local accounts working alongside SSO, so a broken IdP does not lock
+  # you out of your own task list.
+  local:
+    enabled: true
+  openid:
+    enabled: true
+    # Vikunja appends the provider key to this to form the callback, giving
+    # .../auth/openid/authentik — which must match the redirect_uri registered
+    # in the authentik blueprint exactly.
+    redirecturl: https://{{ tunnel_hosts.vikunja }}/auth/openid/
+    providers:
+      authentik:
+        name: Authentik
+        authurl: https://{{ tunnel_hosts.authentik }}/application/o/vikunja-oidc/
+        logouturl: https://{{ tunnel_hosts.authentik }}/application/o/vikunja-oidc/end-session/
+        clientid: vikunja
+        clientsecret: {{ oidc_vikunja_secret }}
+        scope: openid email profile

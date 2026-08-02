@@ -10,6 +10,10 @@
       - authentik_bootstrap_password | length > 0
       - authentik_bootstrap_token is defined
       - authentik_bootstrap_token | length > 0
+      - oidc_vikunja_secret is defined
+      - oidc_vikunja_secret | length > 0
+      - oidc_tandoor_secret is defined
+      - oidc_tandoor_secret | length > 0
     fail_msg: >-
       Missing authentik secrets in inventories/host_vars/mserver/vault.yml.
       Generate each with 'openssl rand -base64 60 | tr -d "\n"':
@@ -62,6 +66,8 @@
       AUTHENTIK_BOOTSTRAP_PASSWORD={{ authentik_bootstrap_password }}
       AUTHENTIK_BOOTSTRAP_TOKEN={{ authentik_bootstrap_token }}
       AUTHENTIK_BOOTSTRAP_EMAIL={{ acme_email }}
+      OIDC_VIKUNJA_SECRET={{ oidc_vikunja_secret }}
+      OIDC_TANDOOR_SECRET={{ oidc_tandoor_secret }}
   no_log: true
   tags: [identity]
 
@@ -79,6 +85,8 @@
     mode: "0640"
   loop:
     - 00-groups.yaml
+    - 10-proxy-providers.yaml
+    - 20-oidc-providers.yaml
   tags: [identity]
 
 - name: Run identity compose file

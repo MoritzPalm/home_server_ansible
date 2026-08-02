@@ -12,3 +12,10 @@
     state: started
     restart: true
   failed_when: false
+
+- name: Restart cloudflared
+  community.docker.docker_container:
+    name: cloudflared
+    state: started
+    restart: true
+  failed_when: false

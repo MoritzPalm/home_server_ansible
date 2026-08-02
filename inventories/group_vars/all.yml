@@ -76,4 +76,21 @@ wan_allowed_container_ports:
   - { port: 32400, comment: "Plex direct, no proxy" }
 #  - { port: 443, comment: "Traefik websecure (Immich)" }
 
+# Hostnames cloudflared accepts and forwards to Traefik's tunnel entrypoint.
+# Anything not listed is refused at the tunnel. 
+cloudflared_ingress_hosts:
+  - "{{ tunnel_hosts.homepage }}"
+  - "{{ tunnel_hosts.authentik }}"
+  - "{{ tunnel_hosts.overseerr }}"
+  - "{{ tunnel_hosts.vikunja }}"
+  - "{{ tunnel_hosts.tandoor }}"
+  - "{{ tunnel_hosts.hevy }}"
+
+# Hosts protected by authentik forward-auth. Each gets an outpost callback
+# router generated in routers.yml. Only for apps with no login of their own;
+# anything with a native mobile client must use OIDC instead.
+authentik_forward_auth_hosts:
+  - "{{ tunnel_hosts.homepage }}"
+  - "{{ tunnel_hosts.hevy }}"
+
 paperless_path: /mnt/storage/documents

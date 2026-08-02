@@ -1,0 +1,30 @@
+---
+# Managed by Ansible (roles/networking) — edits on the host are overwritten.
+#
+# Locally-managed tunnel config: the ingress rules live here in git rather than
+# in the Cloudflare dashboard, so the routing is reviewable and reproducible
+# alongside everything else.
+tunnel: {{ cloudflared_tunnel_id }}
+credentials-file: /etc/cloudflared/credentials.json
+
+# Prometheus metrics, scraped from the monitoring stack. Container-internal
+# only; the port is not published.
+metrics: 0.0.0.0:2000
+
+# Keep a few connections to distinct Cloudflare datacenters so a single edge
+# having a bad day does not take the services down — which is exactly what
+# happened to api.cloudflare.com during the certificate work.
+ha-connections: 4
+
+ingress:
+{% for host in cloudflared_ingress_hosts %}
+  - hostname: {{ host }}
+    service: https://traefik:8443
+    originRequest:
+      # Matches the wildcard certificate Traefik serves, so TLS on this hop is
+      # verified rather than blindly trusted. Do NOT add noTLSVerify.
+      originServerName: {{ host }}
+{% endfor %}
+  # Required terminal rule: anything not listed above is refused at the tunnel
+  # rather than being forwarded.
+  - service: http_status:404

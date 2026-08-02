@@ -1,0 +1,78 @@
+---
+# Managed by Ansible (roles/identity) — edits on the host are overwritten.
+#
+# OAuth2/OIDC providers for apps that have their own login and native clients.
+# Unlike forward-auth (10-proxy-providers), OIDC lets the app learn who the
+# user is and still works for mobile/API clients, which cannot follow a
+# forward-auth redirect.
+#
+# Client secrets are read from the container environment with !Env, so they
+# live in the vault and never appear in this file or in git.
+version: 1
+metadata:
+  name: homeserver-oidc-providers
+  labels:
+    blueprints.goauthentik.io/instantiate: "true"
+entries:
+
+{% for app in authentik_oidc_apps %}
+  - model: authentik_providers_oauth2.oauth2provider
+    state: present
+    id: oidc-{{ app.slug }}
+    identifiers:
+      name: "{{ app.name }} (OIDC)"
+    attrs:
+      authorization_flow: !Find [authentik_flows.flow, [slug, default-provider-authorization-implicit-consent]]
+      invalidation_flow: !Find [authentik_flows.flow, [slug, default-provider-invalidation-flow]]
+      client_type: confidential
+      client_id: "{{ app.slug }}"
+      client_secret: !Env {{ app.secret_env }}
+      # REQUIRED. Omitting this leaves the list empty rather than defaulting to
+      # anything useful, and authentik then rejects every authorization request
+      # with a bare "invalid_request" / "The request is otherwise malformed" —
+      # the real reason ("Invalid grant_type for provider") only appears in the
+      # server log, not in the redirect back to the app.
+      #
+      # Only authorization_code and refresh_token: these are confidential
+      # server-side clients. client_credentials and password are not needed and
+      # password in particular would let the client trade a username/password
+      # directly for a token, bypassing the login flow and its TOTP stage.
+      grant_types:
+        - authorization_code
+        - refresh_token
+      # Strict matching: an attacker who can register an open redirect on the
+      # app cannot use it to exfiltrate an authorization code.
+      redirect_uris:
+        - matching_mode: strict
+          url: "{{ app.redirect_uri }}"
+      # Without these the token carries no claims and the app cannot identify
+      # the user. Names verified against this authentik version's database.
+      property_mappings:
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+        - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
+      signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
+      sub_mode: user_email
+
+  - model: authentik_core.application
+    state: present
+    identifiers:
+      slug: {{ app.slug }}-oidc
+    attrs:
+      name: "{{ app.name }}"
+      provider: !KeyOf oidc-{{ app.slug }}
+      meta_description: "{{ app.description | default('') }}"
+      meta_launch_url: "https://{{ app.host }}"
+      policy_engine_mode: any
+
+{% for group in app.groups | default([]) %}
+  - model: authentik_policies.policybinding
+    state: present
+    identifiers:
+      target: !Find [authentik_core.application, [slug, {{ app.slug }}-oidc]]
+      group: !Find [authentik_core.group, [name, {{ group }}]]
+      order: {{ loop.index0 }}
+    attrs:
+      enabled: true
+{% endfor %}
+{% endfor %}

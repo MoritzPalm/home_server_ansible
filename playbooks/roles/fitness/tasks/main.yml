@@ -19,6 +19,7 @@
     mode: "0640"
     content: |
       HOST_IP={{ host_ip }}
+      HOST_HEVY={{ tunnel_hosts.hevy }}
       X_API_KEY="{{ hevy_api_key }}"
       LOG_LEVEL="INFO"
       RECAPTCHA_SITE_KEY="6LfkQG0jAAAAANTrIkVXKPfSPHyJnt4hYPWqxh0R"

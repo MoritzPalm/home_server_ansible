@@ -6,6 +6,7 @@
     mode: "0640"
     content: |
       HOST_IP={{ host_ip }}
+      HOST_OVERSEERR={{ tunnel_hosts.overseerr }}
       CONFIG_PATH={{ config_path }}
       MEDIA_PATH={{ media_path }}
       STORAGE_PATH={{ storage_path }}
