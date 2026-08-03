@@ -1,0 +1,18 @@
+# Managed by Ansible (roles/backup) — edits on the host are overwritten.
+[Unit]
+Description=Home server backup (databases + configuration)
+# docker exec is used for every database dump.
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/home-server-backup
+# Type=oneshot is still subject to TimeoutStartSec, which defaults to 90s.
+# The first off-site run uploads the whole photo library and takes hours to
+# days on a domestic uplink; without this systemd would kill it and leave a
+# partial repository behind.
+TimeoutStartSec=infinity
+# Keeps the nightly run out of the way of transcoding.
+Nice=10
+IOSchedulingClass=idle

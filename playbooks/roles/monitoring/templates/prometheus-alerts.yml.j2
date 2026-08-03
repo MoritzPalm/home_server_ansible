@@ -224,4 +224,137 @@ groups:
         annotations:
           summary: "Alertmanager notifications failing ({{ $labels.integration }})"
           description: "Alertmanager is failing to send {{ $labels.integration }} notifications."
+
+  - name: backup
+    interval: 300s
+    rules:
+      - alert: BackupMissing
+        expr: absent(home_server_backup_last_run_timestamp_seconds)
+        for: 6h
+        labels:
+          severity: critical
+        annotations:
+          summary: "No backup metric is being reported"
+          description: "The backup timer or node-exporter's textfile collector is not working."
+
+      - alert: BackupStale
+        expr: time() - home_server_backup_last_run_timestamp_seconds > 172800
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "Last successful backup was {{ $value | humanizeDuration }} ago"
+          description: "Backups run nightly; more than 48h without one means the timer is failing."
+
+      - alert: BackupFailing
+        expr: home_server_backup_success == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Last backup run failed"
+          description: "Check 'journalctl -u home-server-backup.service'."
+
+  # Everything reachable from the internet depends on this group. A silent
+  # failure here means either an outage or a hole, so these are deliberately
+  # noisier than the host rules.
+  - name: ingress
+    interval: 60s
+    rules:
+      # Certificates renew at 30 days remaining. Alerting at 14 leaves two weeks
+      # to notice a broken DNS-01 challenge before anything actually expires.
+      - alert: TlsCertExpiringSoon
+        expr: (traefik_tls_certs_not_after - time()) / 86400 < 14
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "TLS cert for {{ $labels.cn }} expires in {{ $value | printf \"%.0f\" }} days"
+          description: "ACME renewal has not completed. Check traefik logs for DNS-01 errors."
+
+      - alert: TlsCertExpiringCritical
+        expr: (traefik_tls_certs_not_after - time()) / 86400 < 5
+        for: 1h
+        labels:
+          severity: critical
+        annotations:
+          summary: "TLS cert for {{ $labels.cn }} expires in {{ $value | printf \"%.0f\" }} days"
+          description: "Renewal is overdue. Beware the Let's Encrypt limit of 5 failed authorizations per hostname per hour when retrying."
+
+      # Ratio rather than an absolute rate, so a quiet server does not alert on
+      # a couple of stray 5xx and a busy one is not held to the same count.
+      - alert: TraefikHigh5xxRate
+        expr: |
+          sum(rate(traefik_service_requests_total{code=~"5.."}[5m]))
+            / sum(rate(traefik_service_requests_total[5m])) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $value | humanizePercentage }} of requests are 5xx"
+          description: "Traefik is returning server errors for more than 5% of requests."
+
+      # The tunnel is the only ingress path. If it is down, every public
+      # hostname is unreachable, and nothing else here will notice.
+      - alert: CloudflaredTunnelDown
+        expr: up{job="cloudflared"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "cloudflared is not being scraped"
+          description: "The Cloudflare Tunnel is down or unreachable. All public hostnames are offline."
+
+      - alert: CloudflaredNoEdgeConnections
+        expr: sum(cloudflared_tunnel_ha_connections) < 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tunnel has {{ $value }} edge connections"
+          description: "Fewer than 2 connections to Cloudflare datacenters; a single edge failure would cause an outage."
+
+      # cs_alerts counts LOCAL detections only — its HELP string is explicitly
+      # "excluding CAPI" — so this does not fire on the community blocklist,
+      # which accounts for ~15k decisions and changes constantly.
+      #
+      # delta() not increase(): cs_alerts is a gauge, and increase() on a gauge
+      # produces meaningless values rather than an error.
+      - alert: CrowdsecLocalDetectionSpike
+        expr: sum(delta(cs_alerts[10m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CrowdSec raised {{ $value | printf \"%.0f\" }} local alerts in 10m"
+          description: "Someone is being caught by local scenarios rather than the blocklist. Check 'cscli alerts list'."
+
+      - alert: CrowdsecDown
+        expr: up{job="crowdsec"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CrowdSec is not being scraped"
+          description: "The bouncer fails open when the LAPI is unreachable, so requests are no longer being filtered."
+
+      # No failed-login alert here on purpose. authentik's /metrics exposes no
+      # authentication-failure counter: authentik_flows_execution_stage_time
+      # carries only method and stage_type labels, and
+      # authentik_main_request_duration_seconds only dest, so neither can
+      # distinguish a rejected login from an accepted one.
+      #
+      # Brute force against the authentik hostname is covered instead by
+      # CrowdSec, which sees those requests because they pass through Traefik —
+      # its http:bruteforce scenarios are already producing decisions. Alerting
+      # on authentik's own login events would need the Loki ruler, which is not
+      # configured.
+      - alert: AuthentikDown
+        expr: up{job="authentik"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "authentik is not being scraped"
+          description: "SSO is unavailable: forward-auth protected hosts will fail closed and OIDC logins will not complete."
 {% endraw %}

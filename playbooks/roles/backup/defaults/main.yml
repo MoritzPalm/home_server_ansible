@@ -1,0 +1,85 @@
+---
+# Local repository. Lives inside the mergerfs pool, so it protects against
+# application faults, bad migrations and config loss — not against pool loss.
+# That is what the off-site copy is for.
+backup_local_repo: /mnt/backups/restic
+
+# Off-site repository, any restic backend ("b2:bucket:path", "s3:...",
+# "sftp:user@host:/path", "rclone:remote:path"). Empty disables the off-site
+# copy; everything else still runs.
+backup_offsite_repo: "{{ vault_restic_offsite_repo | default('') }}"
+
+# Backend credentials, e.g. B2_ACCOUNT_ID / B2_ACCOUNT_KEY or
+# AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY. Written to a 0400 env file.
+backup_offsite_env: "{{ vault_restic_offsite_env | default({}) }}"
+
+backup_staging: /srv/data/backup-staging
+backup_schedule: "02:30"
+backup_retention: "--keep-daily 7 --keep-weekly 4 --keep-monthly 6"
+
+# Bulk data: photos and scanned documents. Irreplaceable, but hundreds of GB, so
+# it goes STRAIGHT to the off-site repository and is never written to the local
+# one — /mnt/backups is a bind mount inside the same mergerfs pool the originals
+# live on, so a local copy would double pool usage and survive nothing.
+#
+# Skipped entirely when backup_offsite_repo is empty.
+backup_bulk_paths:
+  - "{{ media_path }}/photos"
+  - "{{ paperless_path }}"
+
+# Fewer generations than the config repo: each one is expensive to store, and
+# the value here is "the files exist somewhere else", not deep history.
+backup_bulk_retention: "--keep-daily 7 --keep-weekly 4 --keep-monthly 3"
+
+# S3 storage class for off-site data. GLACIER_IR is the cheapest class restic
+# can use: DEEP_ARCHIVE and GLACIER need an hours-long restore job before
+# objects are readable, and restic must read pack files and index metadata
+# during backup, prune and restore. Leave empty for B2 or other backends.
+backup_offsite_storage_class: "{{ vault_restic_offsite_storage_class | default('') }}"
+
+# backup_textfile_dir is in group_vars/all.yml: the monitoring role mounts it
+# into node-exporter and would fail if it were scoped to this role, which runs
+# later in site.yml.
+
+# Dumped with pg_dump inside each container. Restoring immich requires the same
+# vectorchord/pgvectors image, since the dump references those extensions.
+backup_databases:
+  - { container: authentik_postgres, db: authentik, user: authentik }
+  - { container: paperless_db, db: paperless, user: paperless }
+  - { container: vikunja_db, db: vikunja, user: vikunja }
+  - { container: tandoor_db, db: recipes, user: djangodb }
+  - { container: immich_postgres, db: immich, user: postgres }
+
+# The whole configuration tree rather than an allowlist. Ansible reproduces the
+# declarative config (traefik, crowdsec, cloudflared, authentik blueprints,
+# immich, vikunja, prometheus), but the *arr stack, Plex, Overseerr, qBittorrent
+# and Jellyfin keep their real state in app-owned SQLite databases it never
+# writes: indexers and their API keys, quality profiles, download and watch
+# history, requests, seeding state. Restoring only the allowlist gives a working
+# server, not this server.
+#
+# /srv/data/db is deliberately absent — those databases are dumped with pg_dump
+# instead. A file-level copy of a running Postgres data directory is not
+# reliably restorable.
+backup_paths:
+  - "{{ config_path }}"
+
+# 49 GB raw, most of it regenerable. These exclusions bring it down to a few GB.
+# Everything here is rebuilt automatically by the application on a library scan.
+backup_excludes:
+  # Plex artwork, thumbnails and transcoder cache — 20 GB of the 21 GB Plex uses.
+  # Plug-in Support (the Plex database: watch history, playlists, collections) is
+  # NOT excluded.
+  - "{{ config_path }}/plex/Library/Application Support/Plex Media Server/Media"
+  - "{{ config_path }}/plex/Library/Application Support/Plex Media Server/Metadata"
+  - "{{ config_path }}/plex/Library/Application Support/Plex Media Server/Cache"
+  # *arr artwork caches; lidarr's alone is 3.5 GB.
+  - "{{ config_path }}/*/MediaCover"
+  # Jellyfin. Note the extra level: its /config mount is jellyfin/config, and
+  # /cache is a separate mount at jellyfin/cache.
+  - "{{ config_path }}/jellyfin/cache"
+  - "{{ config_path }}/jellyfin/config/metadata"
+  - "{{ config_path }}/jellyfin/config/log"
+  # Logs are shipped to Loki and are not worth off-site storage.
+  - "*.log"
+  - "{{ config_path }}/*/logs"

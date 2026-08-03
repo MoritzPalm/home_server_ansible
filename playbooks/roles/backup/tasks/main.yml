@@ -1,0 +1,147 @@
+---
+- name: Assert restic password is vaulted
+  ansible.builtin.assert:
+    that:
+      - restic_password | default('') | length > 0
+    fail_msg: >-
+      vault_restic_password is not set. Generate with
+      'openssl rand -base64 48 | tr -d "\n"'.
+      Store it somewhere OUTSIDE this repository as well: without it the
+      backups cannot be restored, including after losing this machine.
+  tags: [backup]
+
+- name: Install restic
+  ansible.builtin.apt:
+    name: restic
+    state: present
+    update_cache: true
+  tags: [backup]
+
+- name: Create restic secret directory
+  ansible.builtin.file:
+    path: /etc/restic
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  tags: [backup]
+
+- name: Write restic repository password
+  ansible.builtin.copy:
+    dest: /etc/restic/password
+    content: "{{ restic_password }}"
+    owner: root
+    group: root
+    mode: "0400"
+  no_log: true
+  tags: [backup]
+
+- name: Write off-site backend credentials
+  ansible.builtin.copy:
+    dest: /etc/restic/offsite.env
+    content: |
+      {% for k, v in backup_offsite_env.items() %}
+      {{ k }}={{ v }}
+      {% endfor %}
+    owner: root
+    group: root
+    mode: "0400"
+  no_log: true
+  when: backup_offsite_repo | length > 0
+  tags: [backup]
+
+- name: Create backup directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - "{{ backup_staging }}"
+    - "{{ backup_local_repo | dirname }}"
+  tags: [backup]
+
+# World-readable: node-exporter runs unprivileged and only reads counters here.
+- name: Create node-exporter textfile directory
+  ansible.builtin.file:
+    path: "{{ backup_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [backup]
+
+# 'restic cat config' succeeds only on an initialised repository, which makes it
+# a safe idempotence check: init on an existing repo would error, and running it
+# blindly every play would mask a repository that had gone missing.
+- name: Check whether the local repository is initialised
+  ansible.builtin.command: restic -r {{ backup_local_repo }} cat config
+  environment:
+    RESTIC_PASSWORD_FILE: /etc/restic/password
+  register: restic_local_config
+  changed_when: false
+  failed_when: false
+  tags: [backup]
+
+- name: Initialise local repository
+  ansible.builtin.command: restic -r {{ backup_local_repo }} init
+  environment:
+    RESTIC_PASSWORD_FILE: /etc/restic/password
+  when: restic_local_config.rc != 0
+  tags: [backup]
+
+- name: Check whether the off-site repository is initialised
+  ansible.builtin.shell:
+    cmd: |
+      set -a; . /etc/restic/offsite.env; set +a
+      restic -r "{{ backup_offsite_repo }}" cat config
+  environment:
+    RESTIC_PASSWORD_FILE: /etc/restic/password
+  register: restic_offsite_config
+  changed_when: false
+  failed_when: false
+  when: backup_offsite_repo | length > 0
+  tags: [backup]
+
+- name: Initialise off-site repository
+  ansible.builtin.shell:
+    cmd: |
+      set -a; . /etc/restic/offsite.env; set +a
+      restic -r "{{ backup_offsite_repo }}" init
+  environment:
+    RESTIC_PASSWORD_FILE: /etc/restic/password
+  when:
+    - backup_offsite_repo | length > 0
+    - restic_offsite_config.rc | default(1) != 0
+  tags: [backup]
+
+- name: Install backup script
+  ansible.builtin.template:
+    src: backup.sh.j2
+    dest: /usr/local/bin/home-server-backup
+    owner: root
+    group: root
+    mode: "0700"
+  tags: [backup]
+
+- name: Install backup systemd units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - home-server-backup.service
+    - home-server-backup.timer
+  notify: Reload systemd for backup
+  tags: [backup]
+
+- name: Enable backup timer
+  ansible.builtin.systemd:
+    name: home-server-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [backup]

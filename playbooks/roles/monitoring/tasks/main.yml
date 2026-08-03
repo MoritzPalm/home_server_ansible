@@ -224,6 +224,10 @@
       HOST_IP={{ host_ip }}
       CONFIG_PATH={{ config_path }}
       DATABASE_DIR={{ database_dir }}
+      # promtail mounts LOG_DIR/traefik to read the access log
+      LOG_DIR={{ log_dir }}
+      # node-exporter reads the backup job's textfile metrics from here
+      TEXTFILE_DIR={{ backup_textfile_dir }}
       GRAFANA_ADMIN_USER={{ grafana_admin_user }}
       GRAFANA_ADMIN_PASSWORD={{ grafana_admin_password }}
       WATCHTOWER_DISCORD_TOKEN={{ watchtower_discord_token }}

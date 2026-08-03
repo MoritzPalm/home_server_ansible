@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# Managed by Ansible (roles/backup) — edits on the host are overwritten.
+#
+# Two repositories with different contents:
+#   local    databases + configuration, for fast restores of small things
+#   off-site the same, plus the photo and document libraries
+#
+# Bulk data never enters the local repository: it lives in the same mergerfs
+# pool that /mnt/backups is a bind mount of, so a copy there survives nothing.
+
+set -euo pipefail
+
+STAGING="{{ backup_staging }}"
+TEXTFILE="{{ backup_textfile_dir }}/backup.prom"
+export RESTIC_REPOSITORY="{{ backup_local_repo }}"
+export RESTIC_PASSWORD_FILE=/etc/restic/password
+
+start=$(date +%s)
+status=1
+
+# Always publishes a metric, including on failure, so a crashed run is visible
+# as success=0 rather than as a stale timestamp that could equally mean "the
+# timer stopped".
+finish() {
+  local end
+  end=$(date +%s)
+  cat > "${TEXTFILE}.tmp" <<EOF
+# HELP home_server_backup_success Whether the last backup run completed.
+# TYPE home_server_backup_success gauge
+home_server_backup_success ${status}
+# HELP home_server_backup_last_run_timestamp_seconds Unix time of the last backup run.
+# TYPE home_server_backup_last_run_timestamp_seconds gauge
+home_server_backup_last_run_timestamp_seconds ${end}
+# HELP home_server_backup_duration_seconds Duration of the last backup run.
+# TYPE home_server_backup_duration_seconds gauge
+home_server_backup_duration_seconds $((end - start))
+EOF
+  mv "${TEXTFILE}.tmp" "${TEXTFILE}"
+}
+trap finish EXIT
+
+rm -rf "${STAGING:?}/db"
+mkdir -p "${STAGING}/db"
+chmod 0700 "${STAGING}" "${STAGING}/db"
+
+{% for d in backup_databases %}
+# {{ d.container }}
+if docker ps --format '{% raw %}{{.Names}}{% endraw %}' | grep -qx '{{ d.container }}'; then
+  docker exec {{ d.container }} pg_dump -U {{ d.user }} -d {{ d.db }} --clean --if-exists \
+    | gzip > "${STAGING}/db/{{ d.db }}.sql.gz"
+else
+  echo "WARNING: {{ d.container }} not running, skipping {{ d.db }}" >&2
+fi
+{% endfor %}
+
+# --one-file-system stops the mergerfs pool being walked through a bind mount.
+restic backup \
+  --one-file-system \
+  --tag automated \
+  "${STAGING}/db" \
+{% for p in backup_paths %}
+  "{{ p }}" \
+{% endfor %}
+{% for e in backup_excludes | default([]) %}
+  --exclude "{{ e }}" \
+{% endfor %}
+  --exclude-caches
+
+restic forget --tag automated {{ backup_retention }} --prune
+
+{% if backup_offsite_repo | length > 0 %}
+set -a
+. /etc/restic/offsite.env
+set +a
+export RESTIC_FROM_PASSWORD_FILE=/etc/restic/password
+
+OFFSITE=(-r "{{ backup_offsite_repo }}"{% if backup_offsite_storage_class | length > 0 %} -o "s3.storage-class={{ backup_offsite_storage_class }}"{% endif %})
+
+# 'restic copy' transfers the snapshots just made without re-reading the
+# sources, so the databases are dumped once.
+restic "${OFFSITE[@]}" --from-repo "{{ backup_local_repo }}" copy --tag automated
+restic "${OFFSITE[@]}" forget {{ backup_retention }} --tag automated
+
+{% if backup_bulk_paths | length > 0 %}
+# Bulk data goes direct to off-site, never into the local repo: the originals
+# already live in the same pool /mnt/backups is a bind mount of.
+restic "${OFFSITE[@]}" backup \
+  --one-file-system \
+  --tag bulk \
+{% for p in backup_bulk_paths %}
+  "{{ p }}" \
+{% endfor %}
+  --exclude-caches
+
+restic "${OFFSITE[@]}" forget {{ backup_bulk_retention }} --tag bulk
+{% endif %}
+
+# Prune rewrites pack files, which on a remote repo of this size means
+# downloading and re-uploading data — billable on every provider and slow. Once
+# a week is enough to reclaim space from forgotten snapshots; 'forget' above
+# runs nightly and is metadata-only.
+if [ "$(date +%u)" = "7" ]; then
+  restic "${OFFSITE[@]}" prune --max-repack-size 2G
+fi
+{% endif %}
+
+rm -rf "${STAGING:?}/db"
+status=0

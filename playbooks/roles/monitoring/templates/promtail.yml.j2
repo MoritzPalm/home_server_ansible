@@ -24,3 +24,36 @@ scrape_configs:
         target_label: service
       - source_labels: [__meta_docker_container_label_com_docker_compose_project]
         target_label: stack
+
+  # Traefik's access log is a file, not stdout, so the docker job above never
+  # sees it. This is the only record of who reached which public hostname.
+  - job_name: traefik-access
+    static_configs:
+      - targets: ['localhost']
+        labels:
+          job: traefik-access
+          container: traefik
+          stack: networking
+          __path__: /var/log/traefik/access.log
+    pipeline_stages:
+      - json:
+          expressions:
+            status: DownstreamStatus
+            method: RequestMethod
+            host: RequestHost
+            path: RequestPath
+            router: RouterName
+            client: ClientHost
+            duration: Duration
+      # Labels only for low-cardinality fields. RequestPath and ClientHost stay
+      # out of labels — each distinct value would create a Loki stream.
+      - labels:
+          status:
+          method:
+          host:
+      - metrics:
+          traefik_access_entries:
+            type: Counter
+            description: "access log lines parsed, by status"
+            config:
+              action: inc

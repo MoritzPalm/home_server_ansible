@@ -1,0 +1,13 @@
+# Managed by Ansible (roles/backup) — edits on the host are overwritten.
+[Unit]
+Description=Nightly home server backup
+
+[Timer]
+OnCalendar=*-*-* {{ backup_schedule }}:00
+# Runs after a boot that spanned the scheduled time, so a machine that is off
+# overnight still produces a backup.
+Persistent=true
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target

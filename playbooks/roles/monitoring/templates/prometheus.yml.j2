@@ -53,3 +53,26 @@ scrape_configs:
   - job_name: grafana
     static_configs:
       - targets: ['grafana:3000']
+
+  # --- public ingress -------------------------------------------------------
+  # All four are reached over the 'internal' docker network; none of these
+  # metrics ports is published to the host.
+
+  # Traefik serves metrics on its internal 'traefik' entrypoint, the same one
+  # ping uses. This is not the dashboard, which is router-served on
+  # traefik.{{ internal_domain }} and requires auth.
+  - job_name: traefik
+    static_configs:
+      - targets: ['traefik:8080']
+
+  - job_name: crowdsec
+    static_configs:
+      - targets: ['crowdsec:6060']
+
+  - job_name: cloudflared
+    static_configs:
+      - targets: ['cloudflared:2000']
+
+  - job_name: authentik
+    static_configs:
+      - targets: ['authentik_server:9300']

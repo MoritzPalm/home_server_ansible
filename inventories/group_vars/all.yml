@@ -99,3 +99,5 @@ authentik_forward_auth_hosts:
   - "{{ tunnel_hosts.immich }}"
 
 paperless_path: /mnt/storage/documents
+
+backup_textfile_dir: /srv/data/node-exporter-textfile
