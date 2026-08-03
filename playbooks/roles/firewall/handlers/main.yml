@@ -6,3 +6,8 @@
 - name: Persist netfilter rules
   ansible.builtin.command: netfilter-persistent save
   changed_when: true
+
+- name: Restart fail2ban
+  ansible.builtin.service:
+    name: fail2ban
+    state: restarted

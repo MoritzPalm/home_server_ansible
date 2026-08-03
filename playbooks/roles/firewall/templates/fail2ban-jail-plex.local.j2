@@ -1,0 +1,31 @@
+# Managed by Ansible (roles/firewall) — edits on the host are overwritten.
+#
+# Plex is the one internet-facing service that does not pass through Traefik, so
+# CrowdSec cannot see a single request to it. This jail is the only intrusion
+# detection covering TCP {{ wan_allowed_container_ports | map(attribute='port') | join(', ') }}.
+
+[plex-auth]
+enabled  = true
+filter   = plex-auth
+backend  = auto
+
+# A symlink, not the real path: fail2ban splits the last space-separated token
+# off a logpath as a head/tail modifier, so Plex's own path — which has spaces
+# in three directory names — makes the server refuse to start entirely.
+# Symlink target: {{ plex_log_path }}
+logpath  = {{ plex_log_link }}
+
+maxretry = {{ plex_fail2ban_maxretry }}
+findtime = {{ plex_fail2ban_findtime }}
+bantime  = {{ plex_fail2ban_bantime }}
+
+# Everything that legitimately generates 401s. Tailscale's CGNAT range is here
+# because every admin path into this box runs over it — banning a Tailscale
+# address would lock out the way you fix the ban. The Docker bridge range covers
+# multi-scrobbler, which produced a burst of 401s when its Plex token was
+# invalidated and would otherwise have banned itself.
+ignoreip = 127.0.0.1/8 ::1 {{ lan_subnet }} 100.64.0.0/10 172.16.0.0/12
+
+# Bans land in {{ firewall_ban_chain }}, which roles/firewall jumps to from
+# DOCKER-USER. The stock iptables actions write to INPUT, which Docker bypasses.
+action   = docker-user[name={{ plex_fail2ban_name }}]

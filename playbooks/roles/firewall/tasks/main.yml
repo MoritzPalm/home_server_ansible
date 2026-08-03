@@ -48,21 +48,28 @@
 - name: Build desired DOCKER-USER ruleset
   ansible.builtin.set_fact:
     docker_user_rules_v4: >-
-      {{ ['-m conntrack --ctstate RELATED,ESTABLISHED -j RETURN',
-          '-i ' ~ tailscale_if ~ ' -j RETURN',
-          '-i lo -j RETURN',
-          '-s ' ~ lan_subnet ~ ' -j RETURN']
+      {{ ban_chain_jump
+         + ['-m conntrack --ctstate RELATED,ESTABLISHED -j RETURN',
+            '-i ' ~ tailscale_if ~ ' -j RETURN',
+            '-i lo -j RETURN',
+            '-s ' ~ lan_subnet ~ ' -j RETURN']
          + wan_port_rules_v4
          + ['-i ' ~ wan_if ~ ' -j DROP'] }}
     docker_user_rules_v6: >-
-      {{ ['-m conntrack --ctstate RELATED,ESTABLISHED -j RETURN',
-          '-i ' ~ tailscale_if ~ ' -j RETURN',
-          '-i lo -j RETURN',
-          '-s fe80::/10 -j RETURN',
-          '-s fc00::/7 -j RETURN']
+      {{ ban_chain_jump
+         + ['-m conntrack --ctstate RELATED,ESTABLISHED -j RETURN',
+            '-i ' ~ tailscale_if ~ ' -j RETURN',
+            '-i lo -j RETURN',
+            '-s fe80::/10 -j RETURN',
+            '-s fc00::/7 -j RETURN']
          + wan_port_rules_v6
          + ['-i ' ~ wan_if_v6 ~ ' -j DROP'] }}
   vars:
+    # First rule in the chain, ahead of the conntrack RETURN, so a ban drops
+    # traffic on connections the attacker has already established rather than
+    # only preventing new ones. Costs a linear walk of the ban chain per packet,
+    # which at this ruleset size is not measurable.
+    ban_chain_jump: "{{ ['-j ' ~ firewall_ban_chain] if plex_fail2ban_enabled else [] }}"
     wan_port_rules_v4: "{{ wan_allowed_container_ports
       | map(attribute='port')
       | map('string')
@@ -87,6 +94,20 @@
     - { cmd: ip6tables, family: v6 }
   loop_control:
     label: "{{ item.family }}"
+  tags: [firewall]
+
+# Must exist before the rebuild below appends a jump to it, or the `set -e`
+# shell aborts halfway and leaves DOCKER-USER partially built — which fails
+# open, since the DROP is the last rule.
+- name: Create fail2ban ban chain if absent
+  ansible.builtin.command: "{{ item }} -N {{ firewall_ban_chain }}"
+  register: firewall_ban_chain_created
+  changed_when: firewall_ban_chain_created.rc == 0
+  failed_when:
+    - firewall_ban_chain_created.rc != 0
+    - "'exists' not in firewall_ban_chain_created.stderr"
+  when: plex_fail2ban_enabled
+  loop: [iptables, ip6tables]
   tags: [firewall]
 
 # Flush and rebuild in a single shell invocation so the window where the chain
@@ -123,3 +144,94 @@
   loop: [iptables, ip6tables]
   notify: Persist netfilter rules
   tags: [firewall, never]
+
+# --- Plex fail2ban jail -----------------------------------------------------
+# fail2ban itself is installed and enabled by roles/base, which runs earlier in
+# site.yml; this only adds the Plex jail and the DOCKER-USER-aware action.
+
+- name: Install DOCKER-USER fail2ban action
+  ansible.builtin.copy:
+    src: fail2ban-action-docker-user.conf
+    dest: /etc/fail2ban/action.d/docker-user.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: plex_fail2ban_enabled
+  notify: Restart fail2ban
+  tags: [firewall, fail2ban]
+
+- name: Install Plex fail2ban filter
+  ansible.builtin.copy:
+    src: fail2ban-filter-plex-auth.conf
+    dest: /etc/fail2ban/filter.d/plex-auth.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: plex_fail2ban_enabled
+  notify: Restart fail2ban
+  tags: [firewall, fail2ban]
+
+- name: Create directory for the space-free Plex log symlink
+  ansible.builtin.file:
+    path: "{{ plex_log_link | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: plex_fail2ban_enabled
+  tags: [firewall, fail2ban]
+
+# Points at the path, not the inode, so Plex's rotation (rename current to .1,
+# create a fresh file under the same name) leaves the link valid and fail2ban
+# reopens on the inode change.
+- name: Link Plex log to a path without spaces
+  ansible.builtin.file:
+    src: "{{ plex_log_path }}"
+    dest: "{{ plex_log_link }}"
+    state: link
+    force: true
+    follow: false
+  when: plex_fail2ban_enabled
+  notify: Restart fail2ban
+  tags: [firewall, fail2ban]
+
+- name: Install Plex fail2ban jail
+  ansible.builtin.template:
+    src: fail2ban-jail-plex.local.j2
+    dest: /etc/fail2ban/jail.d/plex.local
+    owner: root
+    group: root
+    mode: "0644"
+  when: plex_fail2ban_enabled
+  notify: Restart fail2ban
+  tags: [firewall, fail2ban]
+
+- name: Remove Plex fail2ban jail when disabled
+  ansible.builtin.file:
+    path: /etc/fail2ban/jail.d/plex.local
+    state: absent
+  when: not plex_fail2ban_enabled
+  notify: Restart fail2ban
+  tags: [firewall, fail2ban]
+
+# fail2ban refuses to start at all if a jail's logpath resolves to nothing, so a
+# broken symlink here takes down the sshd jail too. Plex's path is long and has
+# moved between releases; assert it rather than trusting the variable.
+- name: Verify Plex log symlink resolves
+  ansible.builtin.stat:
+    path: "{{ plex_log_link }}"
+    follow: true
+  register: plex_log_stat
+  when: plex_fail2ban_enabled
+  tags: [firewall, fail2ban]
+
+- name: Fail if the Plex log is missing
+  ansible.builtin.fail:
+    msg: >-
+      {{ plex_log_link }} does not resolve to a file
+      (expected target: {{ plex_log_path }}).
+      fail2ban would fail to start, taking the sshd jail down with it.
+  when:
+    - plex_fail2ban_enabled
+    - not (plex_log_stat.stat.exists | default(false))
+  tags: [firewall, fail2ban]

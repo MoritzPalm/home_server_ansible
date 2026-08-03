@@ -11,3 +11,38 @@ tailscale_if: tailscale0
 
 # Set false to tear the rules down (rollback path documented in the plan).
 firewall_docker_user_enabled: true
+
+# --- Dynamic bans -----------------------------------------------------------
+#
+# Plex is the only internet-facing service with no reverse proxy in front of it,
+# so its traffic never reaches Traefik and CrowdSec is blind to it. This jail is
+# the only intrusion detection on that port.
+#
+# Ownership split, and the reason for it: this role owns the ban chain's
+# EXISTENCE and the jump to it from DOCKER-USER; fail2ban owns only the rules
+# inside the chain. That is what lets the two coexist — "Apply DOCKER-USER
+# ruleset" below flushes and rebuilds DOCKER-USER, which would delete a jump
+# fail2ban had inserted itself and silently stop enforcing every ban. Flushing
+# DOCKER-USER does not touch a separate chain, so live bans survive a playbook
+# run and start being consulted again the moment the jump is re-appended.
+plex_fail2ban_enabled: true
+plex_fail2ban_name: plex
+firewall_ban_chain: "f2b-{{ plex_fail2ban_name }}"
+
+plex_log_path: "{{ config_path }}/plex/Library/Application Support/Plex Media Server/Logs/Plex Media Server.log"
+
+# fail2ban CANNOT read a logpath containing spaces. jailreader.py does
+#     path = path.rsplit(" ", 1)
+#     path, tail = path if len(path) > 1 else (path[0], "head")
+# which unconditionally treats the last space-separated token as a head/tail
+# modifier without checking that it is one. Plex's path has three spaces, so
+# fail2ban globs for ".../Logs/Plex Media" and refuses to start with
+# "Have not found any log file". A space-free symlink is the way around it.
+plex_log_link: /var/log/plex/pms.log
+
+# Deliberately tolerant. Plex emits 401s in normal operation — clients probe an
+# endpoint before presenting their token — so this is tuned to catch someone
+# hammering the port, not to react to a single failed login.
+plex_fail2ban_maxretry: 10
+plex_fail2ban_findtime: 600
+plex_fail2ban_bantime: 3600
