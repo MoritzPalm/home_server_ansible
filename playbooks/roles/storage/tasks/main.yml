@@ -22,10 +22,35 @@
 - name: Assert all UUIDs are present
   command: "blkid -t UUID={{ item.uuid }}"
   register: blkid
-  failed_when: blkid.rc != 0
+  failed_when: false
   changed_when: false
   loop: "{{ hdd_mounts }}"
   check_mode: no
+
+- name: List block devices when a UUID is missing
+  ansible.builtin.command: blkid
+  register: blkid_all
+  changed_when: false
+  when: blkid.results | selectattr('rc', 'ne', 0) | list | length > 0
+
+# A replaced disk has a new UUID, so this fires during exactly the recovery it
+# needs to help with. Printing the actual UUIDs turns it from a puzzle into a
+# copy-paste.
+- name: Fail with the UUIDs actually present
+  ansible.builtin.fail:
+    msg: |-
+      Disk UUID(s) in hdd_mounts not found:
+      {% for r in blkid.results | selectattr('rc', 'ne', 0) %}
+        missing: {{ r.item.uuid }}  (expected at {{ r.item.path }})
+      {% endfor %}
+
+      Present on this machine:
+      {{ blkid_all.stdout }}
+
+      If a disk was replaced, update hdd_mounts in
+      inventories/host_vars/mserver/mserver.yml and re-run.
+      See docs/runbooks/04-disk-failure.md.
+  when: blkid.results | selectattr('rc', 'ne', 0) | list | length > 0
 
 - name: Mount HDDs by UUID and persist in fstab
   mount:
