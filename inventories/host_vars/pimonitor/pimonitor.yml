@@ -24,7 +24,7 @@ monitors:
   - { name: "smartctl-exporter", port: 9902, path: "/" }
   - { name: "WUD",              port: 3001,  path: "/" }
   # Media
-  - { name: "Plex",             port: 32400, path: "/identity" }
+  - { name: "Plex",             port: 32400, path: "/identity", scheme: "https", ignore_tls: true }
   - { name: "Jellyfin",         port: 8096,  path: "/health" }
   - { name: "Stash",            port: 9999,  path: "/" }
   - { name: "Immich",           port: 2283,  path: "/api/server/ping" }
