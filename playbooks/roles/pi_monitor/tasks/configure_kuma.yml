@@ -53,3 +53,31 @@
       loop_control:
         label: "{{ item.name }}"
       no_log: true    # avoid leaking the api_token in loop output
+
+    # Checks the public path end to end — Cloudflare edge, tunnel, Traefik,
+    # app — from off the network, which is the point of running Kuma on the Pi.
+    # The monitors above only prove the container answers on the tailnet.
+    #
+    # expiryNotification watches Cloudflare's edge certificate, not Traefik's
+    # Let's Encrypt one, because Cloudflare terminates TLS for these hostnames.
+    # The LE certificate is covered by the TlsCertExpiring alerts in Prometheus.
+    - name: Ensure a monitor exists for each public hostname
+      lucasheld.uptime_kuma.monitor:
+        api_url: "{{ kuma_api_url }}"
+        api_token: "{{ kuma_login.token }}"
+        name: "public: {{ item.key }}"
+        type: "http"
+        url: "https://{{ item.value }}"
+        interval: "{{ kuma_check_interval | default(60) }}"
+        # 3xx is expected rather than exceptional: forward-auth hosts redirect
+        # to authentik and the OIDC apps redirect to their own login. A 404
+        # still fails, which is what a missing Traefik router looks like.
+        accepted_statuscodes: ['200-299', '300-399']
+        expiryNotification: true
+        notification_names:
+          - "Discord"
+        state: present
+      loop: "{{ tunnel_hosts | dict2items }}"
+      loop_control:
+        label: "{{ item.value }}"
+      no_log: true
