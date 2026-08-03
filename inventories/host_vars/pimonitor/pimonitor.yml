@@ -24,7 +24,7 @@ monitors:
   - { name: "smartctl-exporter", port: 9902, path: "/" }
   - { name: "WUD",              port: 3001,  path: "/" }
   # Media
-  - { name: "Plex",             port: 32401, path: "/identity" }
+  - { name: "Plex",             port: 32400, path: "/identity" }
   - { name: "Jellyfin",         port: 8096,  path: "/health" }
   - { name: "Stash",            port: 9999,  path: "/" }
   - { name: "Immich",           port: 2283,  path: "/api/server/ping" }
@@ -45,6 +45,7 @@ monitors:
   - { name: "qBittorrent",      port: 8088,  path: "/" }
   - { name: "FlareSolverr",     port: 8191,  path: "/" }
   - { name: "slskd",            port: 5030,  path: "/" }
+  - { name: "mousehole",        port: 5010,  path: "/" }
   # Apps
   - { name: "Homepage",         port: 3123,  path: "/" }
   - { name: "Portainer",        port: 9443,  path: "/", scheme: "https", ignore_tls: true }
