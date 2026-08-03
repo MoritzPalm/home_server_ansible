@@ -56,10 +56,11 @@ tunnel_hosts:
   paperless: "docs.{{ public_domain }}"
   hevy: "fitness.{{ public_domain }}"
   authentik: "auth.{{ public_domain }}"
-
-# Hostnames served over the directly forwarded :443 (entrypoint "websecure").
-direct_hosts:
   immich: "photos.{{ public_domain }}"
+
+# Nothing is served over a directly forwarded port any more: every public
+# hostname goes through the outbound-only tunnel. Plex is the sole exception
+# and it does not use Traefik at all.
 
 # Ports allowed inbound from the internet. Everything else is dropped by the
 # firewall role's DOCKER-USER rules.
@@ -72,9 +73,10 @@ direct_hosts:
 # Plex is listed from the start because its remote access already works today —
 # an empty list would take a working service down. 443 stays commented until
 # Traefik exists and the Fritz!Box forward + IPv6 pinhole are configured.
+# Plex is the ONLY inbound port. Everything else reaches the internet through
+# the outbound-only Cloudflare Tunnel, so there is nothing else to forward.
 wan_allowed_container_ports:
   - { port: 32400, comment: "Plex direct, no proxy" }
-#  - { port: 443, comment: "Traefik websecure (Immich)" }
 
 # Hostnames cloudflared accepts and forwards to Traefik's tunnel entrypoint.
 # Anything not listed is refused at the tunnel. 
@@ -85,6 +87,7 @@ cloudflared_ingress_hosts:
   - "{{ tunnel_hosts.vikunja }}"
   - "{{ tunnel_hosts.tandoor }}"
   - "{{ tunnel_hosts.hevy }}"
+  - "{{ tunnel_hosts.immich }}"
 
 # Hosts protected by authentik forward-auth. Each gets an outpost callback
 # router generated in routers.yml. Only for apps with no login of their own;
@@ -92,5 +95,6 @@ cloudflared_ingress_hosts:
 authentik_forward_auth_hosts:
   - "{{ tunnel_hosts.homepage }}"
   - "{{ tunnel_hosts.hevy }}"
+  - "{{ tunnel_hosts.immich }}"
 
 paperless_path: /mnt/storage/documents

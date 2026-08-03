@@ -28,6 +28,43 @@
     - media
     - media-multi-scrobbler
 
+- name: Create immich config directory
+  ansible.builtin.file:
+    path: "{{ config_path }}/immich"
+    state: directory
+    owner: "{{ admin_user }}"
+    group: docker
+    mode: "0750"
+  tags: [media]
+
+# Docker creates a missing bind-mount source as a DIRECTORY, which then
+# shadows the real file forever — the same trap that silently disabled
+# vikunja's OIDC.
+- name: Check immich config path
+  ansible.builtin.stat:
+    path: "{{ config_path }}/immich/config.json"
+  register: immich_config_path
+  tags: [media]
+
+- name: Remove immich config.json if docker created it as a directory
+  ansible.builtin.file:
+    path: "{{ config_path }}/immich/config.json"
+    state: absent
+  when: immich_config_path.stat.exists and immich_config_path.stat.isdir
+  tags: [media]
+
+- name: Render immich system config
+  ansible.builtin.template:
+    src: immich-config.json.j2
+    dest: "{{ config_path }}/immich/config.json"
+    # immich runs as uid 1000 in this image; root-owned it would be unreadable
+    # and immich would fall back to defaults with OAuth off.
+    owner: "1000"
+    group: docker
+    mode: "0640"
+  no_log: true
+  tags: [media]
+
 - name: Create .env file for media stack
   copy:
     dest: "{{ compose_root }}/media/.env"
@@ -37,6 +74,7 @@
     content: |
       HOST_IP={{ host_ip }}
       LAN_IP={{ lan_ip }}
+      HOST_IMMICH={{ tunnel_hosts.immich }}
       PLEX_CLAIM={{ plex_claim }}
       MEDIA_PATH={{ media_path }}
       CONFIG_PATH={{ config_path }}

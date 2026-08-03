@@ -14,6 +14,8 @@
       - oidc_vikunja_secret | length > 0
       - oidc_tandoor_secret is defined
       - oidc_tandoor_secret | length > 0
+      - oidc_immich_secret is defined
+      - oidc_immich_secret | length > 0
     fail_msg: >-
       Missing authentik secrets in inventories/host_vars/mserver/vault.yml.
       Generate each with 'openssl rand -base64 60 | tr -d "\n"':
@@ -68,6 +70,7 @@
       AUTHENTIK_BOOTSTRAP_EMAIL={{ acme_email }}
       OIDC_VIKUNJA_SECRET={{ oidc_vikunja_secret }}
       OIDC_TANDOOR_SECRET={{ oidc_tandoor_secret }}
+      OIDC_IMMICH_SECRET={{ oidc_immich_secret }}
   no_log: true
   tags: [identity]
 

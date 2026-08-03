@@ -43,8 +43,10 @@ entries:
       # Strict matching: an attacker who can register an open redirect on the
       # app cannot use it to exfiltrate an authorization code.
       redirect_uris:
+{% for uri in app.redirect_uris %}
         - matching_mode: strict
-          url: "{{ app.redirect_uri }}"
+          url: "{{ uri }}"
+{% endfor %}
       # Without these the token carries no claims and the app cannot identify
       # the user. Names verified against this authentik version's database.
       property_mappings:

@@ -27,7 +27,8 @@ authentik_oidc_apps:
     host: "{{ tunnel_hosts.vikunja }}"
     description: Tasks
     secret_env: OIDC_VIKUNJA_SECRET
-    redirect_uri: "https://{{ tunnel_hosts.vikunja }}/auth/openid/authentik"
+    redirect_uris:
+      - "https://{{ tunnel_hosts.vikunja }}/auth/openid/authentik"
     groups:
       - family
       - authentik Admins
@@ -36,7 +37,25 @@ authentik_oidc_apps:
     host: "{{ tunnel_hosts.tandoor }}"
     description: Recipes
     secret_env: OIDC_TANDOOR_SECRET
-    redirect_uri: "https://{{ tunnel_hosts.tandoor }}/accounts/oidc/authentik/login/callback/"
+    redirect_uris:
+      - "https://{{ tunnel_hosts.tandoor }}/accounts/oidc/authentik/login/callback/"
+    groups:
+      - family
+      - authentik Admins
+  # Immich supports OIDC natively, INCLUDING the mobile app via a custom URL
+  # scheme — so it does not need (and cannot use) forward-auth. Three redirect
+  # URIs are required: two for the web client and one for the phone.
+  - slug: immich
+    name: Immich
+    host: "{{ tunnel_hosts.immich }}"
+    description: Photos
+    secret_env: OIDC_IMMICH_SECRET
+    redirect_uris:
+      - "https://{{ tunnel_hosts.immich }}/auth/login"
+      - "https://{{ tunnel_hosts.immich }}/user-settings"
+      # The mobile app's custom scheme. Without this, phone login fails while
+      # the browser works.
+      - "app.immich:///oauth-callback"
     groups:
       - family
       - authentik Admins

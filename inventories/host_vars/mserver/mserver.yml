@@ -33,3 +33,5 @@ cloudflared_credentials: "{{ vault_cloudflared_credentials }}"
 # blueprint !Env tag) and each app. Generate with: openssl rand -hex 32
 oidc_vikunja_secret: "{{ vault_oidc_vikunja_secret }}"
 oidc_tandoor_secret: "{{ vault_oidc_tandoor_secret }}"
+oidc_immich_secret: "{{ vault_oidc_immich_secret }}"
+
