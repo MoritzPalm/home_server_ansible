@@ -1,0 +1,121 @@
+---
+# Takes a freshly installed Ubuntu host to the point where site.yml can reach it
+# over Tailscale. Everything here is idempotent, so re-running against a working
+# host is harmless.
+
+- name: Assert a bootstrap target was given
+  ansible.builtin.assert:
+    that:
+      - bootstrap_ip | length > 0
+    fail_msg: >-
+      Run with -e bootstrap_ip=<lan address>. The inventory points at the
+      tailnet address, which does not answer until this role has joined the
+      machine to Tailscale.
+  tags: [bootstrap]
+
+- name: Install bootstrap packages
+  ansible.builtin.apt:
+    name: "{{ bootstrap_packages }}"
+    state: present
+    update_cache: true
+  tags: [bootstrap]
+
+- name: Create the admin account
+  ansible.builtin.user:
+    name: "{{ bootstrap_user }}"
+    groups: sudo
+    append: true
+    shell: /bin/bash
+    state: present
+  tags: [bootstrap]
+
+- name: Install admin authorized_keys
+  ansible.posix.authorized_key:
+    user: "{{ bootstrap_user }}"
+    key: "{{ item }}"
+    state: present
+  loop: "{{ admin_ssh_public_keys }}"
+  tags: [bootstrap]
+
+# roles/base later disables password authentication. Passwordless sudo is what
+# keeps Ansible working after that, since there is no password to prompt for.
+- name: Allow passwordless sudo for the admin account
+  ansible.builtin.copy:
+    dest: "/etc/sudoers.d/90-{{ bootstrap_user }}"
+    content: "{{ bootstrap_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: visudo -cf %s
+  tags: [bootstrap]
+
+- name: Add Tailscale repo key
+  ansible.builtin.apt_key:
+    url: "https://pkgs.tailscale.com/stable/{{ ansible_distribution | lower }}/{{ ansible_distribution_release }}.gpg"
+    state: present
+  tags: [bootstrap]
+
+- name: Add Tailscale repo
+  ansible.builtin.apt_repository:
+    repo: "deb https://pkgs.tailscale.com/stable/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} main"
+    state: present
+  tags: [bootstrap]
+
+- name: Install tailscale
+  ansible.builtin.apt:
+    name: tailscale
+    state: present
+    update_cache: true
+  tags: [bootstrap]
+
+- name: Enable and start tailscaled
+  ansible.builtin.systemd:
+    name: tailscaled
+    state: started
+    enabled: true
+  tags: [bootstrap]
+
+- name: Check Tailscale status
+  ansible.builtin.command: tailscale status --peers=false
+  register: bootstrap_ts_status
+  changed_when: false
+  failed_when: false
+  tags: [bootstrap]
+
+# An expired auth key is the most common bootstrap failure and the error is
+# unhelpful, so it is called out explicitly here rather than left to the runbook.
+- name: Join the tailnet
+  ansible.builtin.command: >
+    tailscale up
+    --hostname={{ tailscale_hostname }}
+    --operator={{ tailscale_operator }}
+    --ssh=true
+  environment:
+    TS_AUTHKEY: "{{ tailscale_authkey }}"
+  when: bootstrap_ts_status.rc != 0 or
+        ('Logged out' in (bootstrap_ts_status.stdout | default('')))
+  register: bootstrap_ts_up
+  changed_when: bootstrap_ts_up.rc == 0
+  failed_when: bootstrap_ts_up.rc != 0
+  no_log: true
+  tags: [bootstrap]
+
+- name: Read the tailnet address
+  ansible.builtin.command: tailscale ip -4
+  register: bootstrap_ts_ip
+  changed_when: false
+  tags: [bootstrap]
+
+# Confirms the machine is reachable at the address site.yml will use, so the
+# handover between the two playbooks cannot fail silently.
+- name: Confirm the tailnet address matches the inventory
+  ansible.builtin.assert:
+    that:
+      - bootstrap_ts_ip.stdout | trim == host_ip
+    fail_msg: >-
+      Machine joined the tailnet as {{ bootstrap_ts_ip.stdout | trim }} but the
+      inventory expects {{ host_ip }}. Either the old node is still registered
+      (remove it in the Tailscale admin panel and re-run) or host_ip needs
+      updating in host_vars.
+    success_msg: "Reachable at {{ host_ip }}; site.yml can run without -e bootstrap_ip."
+  tags: [bootstrap]

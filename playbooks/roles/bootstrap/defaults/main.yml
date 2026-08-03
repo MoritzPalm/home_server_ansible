@@ -1,0 +1,15 @@
+---
+# Account the rest of the playbooks connect as. roles/base installs
+# authorized_keys for this user but never creates it, which is why a fresh
+# machine needs this role first.
+bootstrap_user: "{{ admin_user }}"
+
+# Set to the LAN address of the new machine. The inventory normally points at
+# the tailnet address, which does not answer until this role has run.
+bootstrap_ip: ""
+
+bootstrap_packages:
+  - sudo
+  - python3
+  - curl
+  - gnupg

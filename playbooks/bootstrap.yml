@@ -1,0 +1,18 @@
+---
+# Takes a freshly installed Ubuntu host to the point where site.yml works.
+#
+#   ansible-playbook playbooks/bootstrap.yml \
+#     -e bootstrap_ip=192.168.178.35 -e bootstrap_ssh_user=ubuntu
+#
+# See docs/runbooks/03-ssd-failure.md.
+- hosts: mserver
+  become: true
+  gather_facts: true
+  vars:
+    # The inventory points at the tailnet address, which does not answer until
+    # this play has joined the machine to Tailscale. Play vars outrank inventory
+    # host vars, so both of these override hosts.yml for this run only.
+    ansible_host: "{{ bootstrap_ip }}"
+    ansible_user: "{{ bootstrap_ssh_user | default('ubuntu') }}"
+  roles:
+    - bootstrap
