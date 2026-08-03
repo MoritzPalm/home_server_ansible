@@ -65,21 +65,22 @@
          + wan_port_rules_v6
          + ['-i ' ~ wan_if_v6 ~ ' -j DROP'] }}
   vars:
-    # First rule in the chain, ahead of the conntrack RETURN, so a ban drops
-    # traffic on connections the attacker has already established rather than
-    # only preventing new ones. Costs a linear walk of the ban chain per packet,
-    # which at this ruleset size is not measurable.
+    # First rule, ahead of the conntrack RETURN, so bans also drop traffic on
+    # connections that are already established.
     ban_chain_jump: "{{ ['-j ' ~ firewall_ban_chain] if plex_fail2ban_enabled else [] }}"
+    # "-m tcp" is spelled out because `iptables -S` prints that inferred form,
+    # and the idempotence check below compares against its output. Omitting it
+    # makes every run flush and rebuild the chain.
     wan_port_rules_v4: "{{ wan_allowed_container_ports
       | map(attribute='port')
       | map('string')
-      | map('regex_replace', '^', '-i ' ~ wan_if ~ ' -p tcp --dport ')
+      | map('regex_replace', '^', '-i ' ~ wan_if ~ ' -p tcp -m tcp --dport ')
       | map('regex_replace', '$', ' -j RETURN')
       | list }}"
     wan_port_rules_v6: "{{ wan_allowed_container_ports
       | map(attribute='port')
       | map('string')
-      | map('regex_replace', '^', '-i ' ~ wan_if_v6 ~ ' -p tcp --dport ')
+      | map('regex_replace', '^', '-i ' ~ wan_if_v6 ~ ' -p tcp -m tcp --dport ')
       | map('regex_replace', '$', ' -j RETURN')
       | list }}"
   tags: [firewall]
@@ -96,9 +97,8 @@
     label: "{{ item.family }}"
   tags: [firewall]
 
-# Must exist before the rebuild below appends a jump to it, or the `set -e`
-# shell aborts halfway and leaves DOCKER-USER partially built — which fails
-# open, since the DROP is the last rule.
+# Must exist before the rebuild appends a jump to it. Otherwise the `set -e`
+# shell aborts partway and leaves DOCKER-USER without its trailing DROP.
 - name: Create fail2ban ban chain if absent
   ansible.builtin.command: "{{ item }} -N {{ firewall_ban_chain }}"
   register: firewall_ban_chain_created
@@ -181,9 +181,8 @@
   when: plex_fail2ban_enabled
   tags: [firewall, fail2ban]
 
-# Points at the path, not the inode, so Plex's rotation (rename current to .1,
-# create a fresh file under the same name) leaves the link valid and fail2ban
-# reopens on the inode change.
+# Points at the path, not the inode, so Plex's rotation leaves the link valid
+# and fail2ban reopens on the inode change.
 - name: Link Plex log to a path without spaces
   ansible.builtin.file:
     src: "{{ plex_log_path }}"
@@ -214,9 +213,8 @@
   notify: Restart fail2ban
   tags: [firewall, fail2ban]
 
-# fail2ban refuses to start at all if a jail's logpath resolves to nothing, so a
-# broken symlink here takes down the sshd jail too. Plex's path is long and has
-# moved between releases; assert it rather than trusting the variable.
+# fail2ban refuses to start if any jail's logpath resolves to nothing, so a
+# broken symlink here takes the sshd jail down with it.
 - name: Verify Plex log symlink resolves
   ansible.builtin.stat:
     path: "{{ plex_log_link }}"
