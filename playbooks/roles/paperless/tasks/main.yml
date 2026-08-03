@@ -1,0 +1,118 @@
+---
+- name: Fail if paperless secrets are unset
+  ansible.builtin.assert:
+    that:
+      - paperless_postgres_password | default('') | length > 0
+      - paperless_secret_key | default('') | length > 0
+      - paperless_admin_password | default('') | length > 0
+      - oidc_paperless_secret | default('') | length > 0
+    fail_msg: >-
+      Missing paperless secrets in vault.yml. Required:
+      vault_paperless_postgres_password, vault_paperless_secret_key,
+      vault_paperless_admin_password, vault_oidc_paperless_secret
+  tags:
+    - paperless
+
+# postgres:18-alpine runs as uid 70. Both directories are created because
+# PGDATA is set to the pgdata subdirectory of the bind mount; initdb will not
+# create the parent itself.
+- name: Create paperless postgres data directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "70"
+    group: "70"
+    mode: "0700"
+  loop:
+    - "{{ database_dir }}/paperless"
+    - "{{ database_dir }}/paperless/pgdata"
+  tags:
+    - paperless
+
+- name: Create paperless redis data directory
+  ansible.builtin.file:
+    path: "{{ cache_dir }}/paperless-redis"
+    state: directory
+    owner: "999"
+    group: "999"
+    mode: "0750"
+  tags:
+    - paperless
+
+- name: Create paperless application directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ paperless_uid }}"
+    group: "{{ paperless_gid }}"
+    mode: "0750"
+  loop:
+    - "{{ config_path }}/paperless"
+    - "{{ config_path }}/paperless/data"
+    - "{{ paperless_path }}"
+    - "{{ paperless_path }}/media"
+    - "{{ paperless_path }}/consume"
+    - "{{ paperless_path }}/export"
+  tags:
+    - paperless
+
+- name: Create .env file for paperless stack
+  ansible.builtin.copy:
+    # Compose auto-loads .env from the project directory; the stack.env name in
+    # the pre-rewrite compose file was a Portainer leftover and is not read.
+    dest: "{{ compose_root }}/paperless/.env"
+    owner: root
+    group: docker
+    mode: "0640"
+    content: |
+      TZ={{ timezone }}
+      CONFIG_PATH={{ config_path }}
+      DATABASE_DIR={{ database_dir }}
+      CACHE_DIR={{ cache_dir }}
+      PAPERLESS_PATH={{ paperless_path }}
+      HOST_PAPERLESS={{ tunnel_hosts.paperless }}
+      HOST_AUTHENTIK={{ tunnel_hosts.authentik }}
+      PAPERLESS_DB_NAME={{ paperless_db_name }}
+      PAPERLESS_DB_USER={{ paperless_db_user }}
+      PAPERLESS_DB_PASSWORD={{ paperless_postgres_password }}
+      PAPERLESS_SECRET_KEY={{ paperless_secret_key }}
+      PAPERLESS_ADMIN_USER={{ admin_user }}
+      PAPERLESS_ADMIN_PASSWORD={{ paperless_admin_password }}
+      OIDC_PAPERLESS_SECRET={{ oidc_paperless_secret }}
+  no_log: true
+  tags:
+    - paperless
+
+- name: Run paperless.yml compose file
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_root }}/paperless"
+    files: paperless.yml
+  tags:
+    - paperless
+
+# The stack publishes no ports, so this checks the container's own healthcheck
+# rather than a host port. Traefik skips unhealthy containers without logging a
+# routing error, so an unhealthy paperless presents as a 404 on docs.* with
+# nothing in the Traefik log to explain it.
+- name: Wait for paperless to become healthy
+  community.docker.docker_container_info:
+    name: paperless
+  register: paperless_info
+  retries: 30
+  delay: 10
+  until:
+    - paperless_info.exists
+    - paperless_info.container.State.Health.Status | default('') == 'healthy'
+  failed_when: false
+  tags:
+    - paperless
+
+- name: Fail if paperless did not become healthy
+  ansible.builtin.fail:
+    msg: >-
+      paperless is {{ paperless_info.container.State.Health.Status
+                      | default('not running') }} after 5 minutes.
+      Traefik will not route to it. Check: docker logs paperless
+  when: paperless_info.container.State.Health.Status | default('') != 'healthy'
+  tags:
+    - paperless

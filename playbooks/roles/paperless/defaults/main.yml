@@ -1,0 +1,12 @@
+---
+# paperless_path is defined in group_vars/all.yml: the archive grows without
+# bound and belongs on the pool, while data/ (search index, thumbnails) stays
+# on the SSD under config_path.
+
+paperless_db_name: paperless
+paperless_db_user: paperless
+
+# paperless-ngx writes as this uid/gid, set via USERMAP_UID/GID in the compose
+# file. The bind-mounted directories must be owned by it.
+paperless_uid: "1000"
+paperless_gid: "1000"

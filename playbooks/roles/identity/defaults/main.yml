@@ -42,6 +42,16 @@ authentik_oidc_apps:
     groups:
       - family
       - authentik Admins
+  - slug: paperless
+    name: Paperless
+    host: "{{ tunnel_hosts.paperless }}"
+    description: Documents
+    secret_env: OIDC_PAPERLESS_SECRET
+    redirect_uris:
+      - "https://{{ tunnel_hosts.paperless }}/accounts/oidc/authentik/login/callback/"
+    groups:
+      - family
+      - authentik Admins
   # Immich supports OIDC natively, INCLUDING the mobile app via a custom URL
   # scheme — so it does not need (and cannot use) forward-auth. Three redirect
   # URIs are required: two for the web client and one for the phone.
