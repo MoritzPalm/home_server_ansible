@@ -64,22 +64,41 @@ backup_databases:
 backup_paths:
   - "{{ config_path }}"
 
-# 49 GB raw, most of it regenerable. These exclusions bring it down to a few GB.
-# Everything here is rebuilt automatically by the application on a library scan.
+# The rule: keep state, drop whatever the application regenerates.
+#
+# Sizes measured 2026-08-04 against a 49 GB tree. Generic "**/" patterns are
+# preferred over per-app paths so apps added later are covered without an edit.
+#
+# NOT excluded, deliberately: every "Backups/" directory. Those are the apps'
+# own consistent database dumps, and they are the mitigation for restic copying
+# live SQLite files while an app may be mid-write — a restored *.db could
+# otherwise be torn.
 backup_excludes:
-  # Plex artwork, thumbnails and transcoder cache — 20 GB of the 21 GB Plex uses.
-  # Plug-in Support (the Plex database: watch history, playlists, collections) is
-  # NOT excluded.
+  # Plex artwork, thumbnails and transcoder cache: 20 GB of the 21 GB Plex uses.
+  # Plug-in Support (watch history, playlists, collections) is NOT excluded.
   - "{{ config_path }}/plex/Library/Application Support/Plex Media Server/Media"
   - "{{ config_path }}/plex/Library/Application Support/Plex Media Server/Metadata"
   - "{{ config_path }}/plex/Library/Application Support/Plex Media Server/Cache"
-  # *arr artwork caches; lidarr's alone is 3.5 GB.
-  - "{{ config_path }}/*/MediaCover"
-  # Jellyfin. Note the extra level: its /config mount is jellyfin/config, and
-  # /cache is a separate mount at jellyfin/cache.
-  - "{{ config_path }}/jellyfin/cache"
-  - "{{ config_path }}/jellyfin/config/metadata"
-  - "{{ config_path }}/jellyfin/config/log"
-  # Logs are shipped to Loki and are not worth off-site storage.
-  - "*.log"
-  - "{{ config_path }}/*/logs"
+
+  # Derived data, any app, any depth.
+  - "**/MediaCover"       # *arr artwork — lidarr's alone is 3.5 GB
+  - "**/generated"        # stash previews and sprites
+  - "**/[Cc]ache"
+  - "**/metadata"
+
+  # Logs ship to Loki. lidarr's logs.db is 357 MB and is a log, not config.
+  - "**/logs"
+  - "**/log"
+  - "**/logs.db"
+  - "**/*.log"
+
+  # Transient SQLite sidecars. Never useful, and restoring one beside a
+  # mismatched .db is actively harmful. Also stops the "no such file" warnings
+  # when they vanish between restic listing a directory and reading it.
+  - "**/*.db-shm"
+  - "**/*.db-wal"
+
+  # slskd: partial downloads and a regenerable search index. events.db and
+  # transfers.db (40 MB) are kept — those are transfer history.
+  - "{{ config_path }}/slskd/incomplete"
+  - "{{ config_path }}/slskd/data/search.db"

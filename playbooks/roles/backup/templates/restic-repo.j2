@@ -1,0 +1,44 @@
+#!/bin/sh
+# Managed by Ansible (roles/backup) — edits on the host are overwritten.
+#
+# Wraps restic with the repository and credentials already set, so recovery
+# commands are one-liners and do not depend on environment exported earlier in
+# the shell. Runbooks call this rather than "export ... && sudo -E restic".
+#
+#   restic-repo local   snapshots
+#   restic-repo offsite ls latest
+#   restic-repo local   restore latest --target /tmp/r --include /srv/data/configs
+
+set -eu
+
+usage() {
+  echo "usage: ${0##*/} local|offsite <restic args...>" >&2
+  exit 2
+}
+
+[ $# -ge 1 ] || usage
+target=$1
+shift
+
+case "$target" in
+  local)
+    exec restic -r "{{ backup_local_repo }}" --password-file /etc/restic/password "$@"
+    ;;
+  offsite)
+{% if backup_offsite_repo | length > 0 %}
+    # Backend credentials (B2/S3 keys); absent for sftp with key auth.
+    if [ -r /etc/restic/offsite.env ]; then
+      set -a
+      . /etc/restic/offsite.env
+      set +a
+    fi
+    exec restic -r "{{ backup_offsite_repo }}" --password-file /etc/restic/password "$@"
+{% else %}
+    echo "no off-site repository configured (backup_offsite_repo is empty)" >&2
+    exit 1
+{% endif %}
+    ;;
+  *)
+    usage
+    ;;
+esac

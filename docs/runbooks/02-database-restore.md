@@ -33,14 +33,11 @@ records it should have.
 ## Restore
 
 ```bash
-export RESTIC_REPOSITORY=/mnt/backups/restic
-export RESTIC_PASSWORD_FILE=/etc/restic/password
-
 # 1. Pick a snapshot from before the corruption
-restic snapshots --tag automated
+sudo restic-repo local snapshots --tag automated
 
 # 2. Pull just the dumps out of it
-restic restore <snapshot-id> --target /tmp/r \
+sudo restic-repo local restore <snapshot-id> --target /tmp/r \
   --include /srv/data/backup-staging/db
 ls -la /tmp/r/srv/data/backup-staging/db
 

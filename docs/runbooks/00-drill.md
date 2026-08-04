@@ -33,10 +33,8 @@ the alerts are decorative.
 ## 2. Repository integrity
 
 ```bash
-export RESTIC_PASSWORD_FILE=/etc/restic/password
-
-restic -r /mnt/backups/restic check
-restic -r sftp:uXXXXXX@uXXXXXX.your-storagebox.de:/backup check --read-data-subset 5%
+sudo restic-repo local check
+sudo restic-repo offsite check --read-data-subset 5%
 ```
 
 `check` alone verifies structure and metadata. `--read-data-subset 5%` actually
@@ -47,9 +45,9 @@ right trade against egress time.
 ## 3. Does the content match expectations?
 
 ```bash
-restic -r /mnt/backups/restic snapshots
-restic -r /mnt/backups/restic ls latest | grep -E 'sonarr\.db|radarr\.db|Preferences\.xml'
-restic -r /mnt/backups/restic ls latest | grep -c 'Plex Media Server/Media'   # expect 0
+sudo restic-repo local snapshots
+sudo restic-repo local ls latest | grep -E 'sonarr\.db|radarr\.db|Preferences\.xml'
+sudo restic-repo local ls latest | grep -c 'Plex Media Server/Media'   # expect 0
 ```
 
 The last one matters: if the exclusions stopped working, the repository is
@@ -59,7 +57,7 @@ nothing.
 ## 4. Restore something and open it
 
 ```bash
-restic -r /mnt/backups/restic restore latest --target /tmp/drill \
+sudo restic-repo local restore latest --target /tmp/drill \
   --include /srv/data/backup-staging/db
 
 gunzip -t /tmp/drill/srv/data/backup-staging/db/*.sql.gz && echo "dumps intact"

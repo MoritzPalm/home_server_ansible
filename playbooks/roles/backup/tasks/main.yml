@@ -125,6 +125,18 @@
     mode: "0700"
   tags: [backup]
 
+# Recovery commands are typed in a fresh shell, often under pressure. Depending
+# on RESTIC_REPOSITORY being exported earlier is a reliable way to get
+# "Fatal: Please specify repository location" instead of a restore.
+- name: Install restic repository wrapper
+  ansible.builtin.template:
+    src: restic-repo.j2
+    dest: /usr/local/bin/restic-repo
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [backup]
+
 - name: Install backup systemd units
   ansible.builtin.template:
     src: "{{ item }}.j2"

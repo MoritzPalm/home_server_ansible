@@ -75,11 +75,8 @@ df -h /mnt/storage        # full capacity back
 ### 4. Restore what cannot be reacquired
 
 ```bash
-export RESTIC_REPOSITORY='sftp:uXXXXXX@uXXXXXX.your-storagebox.de:/backup'
-export RESTIC_PASSWORD_FILE=/etc/restic/password
-
-restic snapshots --tag bulk
-sudo -E restic restore latest --tag bulk --target / \
+sudo restic-repo offsite snapshots --tag bulk
+sudo restic-repo offsite restore latest --tag bulk --target / \
   --include /mnt/storage/media/photos \
   --include /mnt/storage/documents
 ```
@@ -89,7 +86,7 @@ is missing. If most files survived, restore to a scratch target and fill the
 gaps instead, which avoids rewriting terabytes of intact data:
 
 ```bash
-sudo -E restic restore latest --tag bulk --target /mnt/storage/restore-tmp
+sudo restic-repo offsite restore latest --tag bulk --target /mnt/storage/restore-tmp
 sudo rsync -a --ignore-existing /mnt/storage/restore-tmp/mnt/storage/ /mnt/storage/
 sudo rm -rf /mnt/storage/restore-tmp
 ```

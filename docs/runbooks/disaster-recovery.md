@@ -140,7 +140,7 @@ blueprint from git. Applications come up **empty**.
 ### 4a. Restoring configuration
 
 ```bash
-sudo -E restic restore latest --target / --include /srv/data/configs
+sudo restic-repo offsite restore latest --target / --include /srv/data/configs
 ```
 
 Brings back what Ansible cannot reproduce: *arr indexers and API keys, quality
@@ -156,7 +156,7 @@ Dumps are gzipped `pg_dump --clean --if-exists` output, one per database, under
 `/srv/data/backup-staging/db` in the snapshot.
 
 ```bash
-restic restore latest --target /tmp/r --include /srv/data/backup-staging/db
+sudo restic-repo offsite restore latest --target /tmp/r --include /srv/data/backup-staging/db
 ls /tmp/r/srv/data/backup-staging/db
 ```
 
@@ -178,7 +178,7 @@ Tandoor, Paperless and Immich all authenticate against it.
 ## 5. Restoring photos and documents
 
 ```bash
-restic restore latest --tag bulk --target / \
+sudo restic-repo offsite restore latest --tag bulk --target / \
   --include /mnt/storage/media/photos \
   --include /mnt/storage/documents
 ```

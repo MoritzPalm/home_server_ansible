@@ -77,11 +77,8 @@ done
 ## 5. Restore configuration — no download
 
 ```bash
-export RESTIC_REPOSITORY=/mnt/backups/restic
-export RESTIC_PASSWORD_FILE=/etc/restic/password
-
-restic snapshots --tag automated
-sudo -E restic restore latest --target / --include /srv/data/configs
+sudo restic-repo local snapshots --tag automated
+sudo restic-repo local restore latest --target / --include /srv/data/configs
 ```
 
 This is the step that makes F3 fast: the repository is on the surviving pool, so
