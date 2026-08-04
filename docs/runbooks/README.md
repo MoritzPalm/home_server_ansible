@@ -16,8 +16,9 @@ following links to another runbook while something is down.
 
 ## Before you need them
 
-- [99-secrets-escrow](99-secrets-escrow.md) — the three secrets that must exist
-  off this machine. Without them the backups are unrecoverable.
+- [99-secrets-escrow](99-secrets-escrow.md) — the ansible-vault password is the
+  one irreplaceable secret, and the only thing protecting a publicly readable
+  vault. Everything else derives from it.
 - [00-drill](00-drill.md) — quarterly verification. An untested backup is a
   hypothesis.
 

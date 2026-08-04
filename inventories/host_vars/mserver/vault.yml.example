@@ -1,0 +1,109 @@
+# Readable index of everything in inventories/host_vars/mserver/vault.yml.
+#
+# The real file is committed alongside this one but ansible-vault encrypted, so
+# it is an opaque blob — this file documents which secrets exist, what each is
+# for, and how to generate it. Useful when rebuilding, and when working out what
+# has to be rotated.
+#
+# To create the vault from scratch:
+#
+#   cp vault.yml.example vault.yml
+#   ansible-vault encrypt vault.yml
+#
+# The repository is public, so the vault passphrase is the only thing protecting
+# every value below. It must be high-entropy — see
+# docs/runbooks/99-secrets-escrow.md. Losing it means losing every secret here
+# AND the ability to decrypt any backup.
+
+# --- connection ---------------------------------------------------------------
+vault_ansible_user: "moritzpalm"
+vault_ansible_password: "CHANGEME"          # only used before key auth is set up
+
+# --- tailscale ----------------------------------------------------------------
+# Auth keys expire (90 days default). Mint a fresh one before any bootstrap:
+# https://login.tailscale.com/admin/settings/keys
+vault_tailscale_authkey: "tskey-auth-CHANGEME"
+
+# --- cloudflare ---------------------------------------------------------------
+# Scoped to Zone:DNS:Edit + Zone:Zone:Read on the public zone only. Used by
+# traefik for the DNS-01 challenge.
+vault_cloudflare_dns_api_token: "CHANGEME"
+
+# Both come from 'cloudflared tunnel create <name>': the UUID it prints, and the
+# entire contents of the credentials JSON it writes.
+vault_cloudflared_tunnel_id: "00000000-0000-0000-0000-000000000000"
+vault_cloudflared_credentials: '{"AccountTag":"...","TunnelSecret":"...","TunnelID":"..."}'
+
+# --- crowdsec -----------------------------------------------------------------
+# From: docker exec crowdsec cscli bouncers add traefik-bouncer
+vault_crowdsec_bouncer_key: "CHANGEME"
+
+# --- authentik ----------------------------------------------------------------
+# Generate each with: openssl rand -base64 60 | tr -d '\n'
+# secret_key signs sessions and tokens — rotating it logs everyone out.
+vault_authentik_secret_key: "CHANGEME"
+vault_authentik_postgres_password: "CHANGEME"
+# Read only on first start, to create the initial admin.
+vault_authentik_bootstrap_password: "CHANGEME"
+vault_authentik_bootstrap_token: "CHANGEME"
+
+# --- OIDC client secrets ------------------------------------------------------
+# Shared between authentik (via the blueprint !Env tag) and each app; the two
+# sides must match exactly. Generate with: openssl rand -hex 32
+vault_oidc_vikunja_secret: "CHANGEME"
+vault_oidc_tandoor_secret: "CHANGEME"
+vault_oidc_immich_secret: "CHANGEME"
+vault_oidc_paperless_secret: "CHANGEME"
+
+# --- application databases ----------------------------------------------------
+immich_db_password: "CHANGEME"
+vikunja_postgres_password: "CHANGEME"
+vikunja_jwt_secret: "CHANGEME"
+tandoor_postgres_password: "CHANGEME"
+tandoor_secret_key: "CHANGEME"
+vault_paperless_postgres_password: "CHANGEME"
+# Django SECRET_KEY. Rotating invalidates sessions and password-reset links.
+vault_paperless_secret_key: "CHANGEME"
+# Consumed only on first start, to create the initial superuser.
+vault_paperless_admin_password: "CHANGEME"
+
+# --- backups ------------------------------------------------------------------
+# restic repository encryption. THE most important value here: without it the
+# off-site backups cannot be decrypted by anyone, ever.
+# Generate with: openssl rand -base64 48 | tr -d '\n'
+vault_restic_password: "CHANGEME"
+# Any restic backend. Hetzner Storage Box example:
+vault_restic_offsite_repo: "sftp:uXXXXXX@uXXXXXX.your-storagebox.de:/backup"
+# Backend credentials as a dict, e.g. B2_ACCOUNT_ID / AWS_ACCESS_KEY_ID.
+# Leave empty for sftp with key auth.
+vault_restic_offsite_env: {}
+# S3 only: GLACIER_IR is the cheapest class restic can use. Empty for B2/sftp.
+vault_restic_offsite_storage_class: ""
+
+# --- media --------------------------------------------------------------------
+# From https://plex.tv/claim — expires after 4 MINUTES, so fetch it immediately
+# before the playbook run that consumes it. Leave empty once claimed.
+vault_plex_claim: ""
+plex_token: "CHANGEME"          # X-Plex-Token, also used by multi-scrobbler
+lidarr_api_key: "CHANGEME"
+
+# --- monitoring ---------------------------------------------------------------
+grafana_admin_password: "CHANGEME"
+portainer_admin_password: "CHANGEME"
+portainer_license_key: "CHANGEME"
+alertmanager_discord_token: "CHANGEME"
+watchtower_discord_token: "CHANGEME"
+
+# --- downloads / scrobbling ---------------------------------------------------
+openvpn_password: "CHANGEME"
+torrentleech_password: "CHANGEME"
+soulseek_password: "CHANGEME"
+slskd_api_key: "CHANGEME"
+slskd_web_password: "CHANGEME"
+abr_password: "CHANGEME"
+hevy_api_key: "CHANGEME"
+spotify_client_secret: "CHANGEME"
+ms_spotify_client_secret: "CHANGEME"
+listenbrainz_token: "CHANGEME"
+ms_listenbrainz_token: "CHANGEME"
+soulsync_tidal_client_secret: "CHANGEME"

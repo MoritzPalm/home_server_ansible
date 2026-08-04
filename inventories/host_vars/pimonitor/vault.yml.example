@@ -1,0 +1,23 @@
+# Readable index of everything in inventories/host_vars/pimonitor/vault.yml.
+#
+# The real file is committed alongside this one but ansible-vault encrypted, so
+# it is an opaque blob — this documents what it contains.
+#
+# To create it from scratch:
+#   cp vault.yml.example vault.yml && ansible-vault encrypt vault.yml
+
+# --- connection ---------------------------------------------------------------
+vault_ansible_user: "moritzpalm"
+vault_ansible_password: "CHANGEME"
+
+# --- tailscale ----------------------------------------------------------------
+# Separate key from mserver's so either can be revoked independently.
+vault_tailscale_authkey_pi: "tskey-auth-CHANGEME"
+
+# --- uptime kuma --------------------------------------------------------------
+# Created on first start; the pi_monitor role then logs in with it to manage
+# monitors over the API.
+vault_uptime_kuma_admin_password: "CHANGEME"
+# Discord webhook the monitors notify. Kuma runs off-box deliberately, so this
+# still fires when mserver is down.
+vault_uptime_discord_webhook: "https://discord.com/api/webhooks/CHANGEME"

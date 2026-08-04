@@ -1,44 +1,54 @@
 # Secrets escrow
 
-Three secrets must exist **outside** mserver. Without them the off-site backups
-are undecryptable and recovery from total loss is impossible.
+**Exactly one secret is irreplaceable: the ansible-vault password.**
 
-This is the one part of the recovery design that nothing can enforce.
-
-| Secret | Normally lives in | Why it is unrecoverable |
-|---|---|---|
-| **ansible-vault password** | your memory only | Decrypts the other two. Nothing stores it. |
-| **restic repository password** | `vault_restic_password` in `vault.yml` | The repository is encrypted with it. restic has no recovery mode, no backdoor and no reset. |
-| **Hetzner Storage Box credentials** | `vault_restic_offsite_env` in `vault.yml` | Without them the repository cannot be reached at all. |
-
-## The circular dependency
-
-The restic password and the Storage Box credentials are *in* the vault. The
-vault password decrypts them. So:
+Everything else derives from it. `inventories/host_vars/mserver/vault.yml` is
+committed and pushed to `github.com/MoritzPalm/home_server_ansible`, which is a
+**public** repository — so the encrypted vault can be fetched from anywhere, by
+anyone, with no GitHub account and no credentials:
 
 ```
-vault password  →  vault.yml (on GitHub)  →  restic password  →  backups
+vault password  +  public repo  →  restic password  →  backups
 ```
 
-If you have the vault password and can reach GitHub, you can recover everything.
-**If you lose the vault password, the backups are permanently unreadable** — the
-data still exists on the Storage Box and cannot be decrypted, by you or anyone.
+Lose the vault password and the off-site backups are permanently unreadable. The
+data still exists on the Storage Box; nobody, including you, can decrypt it.
 
-## What to do
+## What the public repository means for the passphrase
 
-**Password manager** (Bitwarden, 1Password, iCloud Keychain — anything not
-hosted on mserver):
+Being public inverts the usual threat model. The encrypted file is downloadable
+by anyone, permanently — forks and clones outlive any deletion — and can be
+attacked offline with no rate limiting. `ansible-vault` 1.1 uses
+PBKDF2-HMAC-SHA256 at 10,000 iterations, which is low by current standards.
 
-- the ansible-vault password
-- the restic repository password, copied out of the vault
-- the Storage Box username and password/SSH key
+That passphrase is the sole protection for **every** secret in the repository:
+Authentik's signing key, every database password, the OIDC client secrets, the
+Cloudflare tunnel credentials, the restic password.
 
-Storing the latter two separately breaks the circular dependency: you can then
-recover even if GitHub is unreachable or the vault file is damaged.
+It should be high-entropy — six or more Diceware words, or 20+ random
+characters. If it is currently something short and memorable:
 
-**Physical copy** for the vault password. A card in a drawer, or with family.
-It protects against losing the password manager itself, which is otherwise a
-single point of failure sitting on the same laptop you use every day.
+1. `ansible-vault rekey inventories/host_vars/mserver/vault.yml`
+2. **Rotate the underlying secrets as well.** Rekeying does not help for a file
+   already published under a weak passphrase: the old version stays in the git
+   history and in every clone.
+
+## What to store where
+
+**Password manager** (anything not hosted on mserver):
+
+| Item | Why |
+|---|---|
+| ansible-vault password | Mandatory. Nothing else can reconstruct it. |
+| restic repository password | Optional redundancy — recovery then does not depend on the repository still existing |
+| Storage Box user + SSH key | Same reasoning |
+
+The second and third are convenience, not necessity: both are recoverable from
+the public repository with the vault password alone.
+
+**Physical copy of the vault password.** A card in a drawer, or with family. The
+password manager is otherwise a single point of failure, usually sitting on the
+same laptop you use every day.
 
 ## Extracting them
 
