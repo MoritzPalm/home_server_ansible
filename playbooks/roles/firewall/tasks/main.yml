@@ -15,31 +15,91 @@
 # The blast radius of a mistake is "a container is unreachable", not "the box is
 # gone".
 
+# Provides iptables-restore, used by docker-user-restore.service below. The
+# netfilter-persistent service it ships is disabled in the next task.
 - name: Install iptables persistence
   ansible.builtin.apt:
     name: iptables-persistent
     state: present
   tags: [firewall]
 
-- name: Ensure systemd drop-in dir exists
-  ansible.builtin.file:
-    path: /etc/systemd/system/netfilter-persistent.service.d
-    state: directory
-    mode: "0755"
+# netfilter-persistent saves and restores the ENTIRE ruleset, including the nat
+# chains docker and tailscale generate at runtime. On boot it reinstates DNAT
+# entries pointing at container addresses from the previous boot, which take
+# precedence over the correct ones docker has just written — every published
+# port bound to a specific host address then refuses connections, while ports
+# bound to 0.0.0.0 keep working. Diagnosing that from the symptom is miserable.
+#
+# DOCKER-USER is persisted instead by docker-user-restore.service, which touches
+# only that chain. Everything else is owned by the daemon that created it and is
+# rebuilt on start.
+- name: Disable netfilter-persistent
+  ansible.builtin.systemd:
+    name: netfilter-persistent
+    enabled: false
+    state: stopped
+  failed_when: false
   tags: [firewall]
 
-# Docker recreates DOCKER-USER on daemon restart. Ordering netfilter-persistent
-# after docker means the saved rules are replayed once the chain exists again,
-# rather than into a chain Docker is about to clobber.
-- name: Order netfilter-persistent after docker
+# Removes an earlier drop-in that put After=docker.service on
+# netfilter-persistent. That unit is Before=network-pre.target and docker is
+# After=network-online.target, so the drop-in closed an ordering cycle. systemd
+# broke the cycle by deleting containerd.service/start — containerd never
+# started, and because docker only Wants (not Requires) it, docker came up and
+# every container operation failed with "dial containerd.sock: timeout".
+#
+# Latent until the first reboot after it was installed.
+- name: Remove the netfilter-persistent drop-in that caused an ordering cycle
+  ansible.builtin.file:
+    path: /etc/systemd/system/netfilter-persistent.service.d/after-docker.conf
+    state: absent
+  notify: Reload systemd
+  tags: [firewall]
+
+# The problem the drop-in was solving is real: docker recreates DOCKER-USER when
+# the daemon starts, discarding rules netfilter-persistent restored earlier in
+# boot. Solved here with a separate unit ordered after docker, which adds no
+# constraint to netfilter-persistent's own position in the boot sequence and so
+# cannot create a cycle.
+- name: Install DOCKER-USER restore unit
   ansible.builtin.copy:
-    dest: /etc/systemd/system/netfilter-persistent.service.d/after-docker.conf
+    dest: /etc/systemd/system/docker-user-restore.service
     mode: "0644"
     content: |
+      # Managed by Ansible (roles/firewall) — edits are overwritten.
       [Unit]
+      Description=Replay saved DOCKER-USER rules after docker starts
       After=docker.service
-      Wants=docker.service
+      Requires=docker.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=yes
+      # Restores ONLY the DOCKER-USER chain, from a file this role generates.
+      # /etc/iptables/rules.v4 is not usable here: it holds docker's own
+      # generated chains too, and replaying those after docker has rebuilt them
+      # duplicates every rule. -n (noflush) leaves the rest of the table alone.
+      #
+      # The flush is a separate ExecStartPre rather than a "-F DOCKER-USER" line
+      # in the file: iptables-restore rejects -F as a rule line ("Bad argument
+      # `DOCKER-USER'"), and --noflush means the ":DOCKER-USER - [0:0]" header
+      # creates the chain without emptying it. Leading "-" so a missing chain on
+      # first boot is not an error.
+      ExecStartPre=-/sbin/iptables -F DOCKER-USER
+      ExecStartPre=-/sbin/ip6tables -F DOCKER-USER
+      ExecStart=/sbin/iptables-restore -n /etc/iptables/docker-user.v4
+      ExecStart=/sbin/ip6tables-restore -n /etc/iptables/docker-user.v6
+
+      [Install]
+      WantedBy=multi-user.target
   notify: Reload systemd
+  tags: [firewall]
+
+- name: Enable DOCKER-USER restore unit
+  ansible.builtin.systemd:
+    name: docker-user-restore.service
+    enabled: true
+    daemon_reload: true
   tags: [firewall]
 
 # Rule order is the security property here, not just style: the lan_subnet /
@@ -135,14 +195,44 @@
       current: "{{ docker_user_current.results[1] }}"
   loop_control:
     label: "{{ item.cmd }}"
-  notify: Persist netfilter rules
+  tags: [firewall]
+
+# Consumed by docker-user-restore.service on boot. Generated from the same facts
+# as the live ruleset, so the two cannot drift.
+#
+# ":chain - [0:0]" with --noflush creates the chain if absent without emptying
+# it — which is why f2b-plex is declared here but its bans survive. The explicit
+# "-F DOCKER-USER" is what makes this idempotent on re-runs.
+- name: Write DOCKER-USER restore files
+  ansible.builtin.copy:
+    dest: "/etc/iptables/docker-user.{{ item.family }}"
+    owner: root
+    group: root
+    mode: "0640"
+    # One join rather than {% %} blocks or conditional line fragments: block tags
+    # emit stray blank lines unless trim_blocks is on, and iptables-restore
+    # rejects blank lines. No "-F DOCKER-USER" line — the unit flushes with the
+    # iptables binary first, because iptables-restore rejects -F as a rule.
+    content: |
+      # Managed by Ansible (roles/firewall) — edits are overwritten.
+      *filter
+      {{ ([':DOCKER-USER - [0:0]']
+          + ([':' ~ firewall_ban_chain ~ ' - [0:0]'] if plex_fail2ban_enabled else [])
+          + (item.rules | map('regex_replace', '^', '-A DOCKER-USER ') | list))
+         | join('\n') }}
+      COMMIT
+  loop:
+    - { family: v4, rules: "{{ docker_user_rules_v4 }}" }
+    - { family: v6, rules: "{{ docker_user_rules_v6 }}" }
+  loop_control:
+    label: "{{ item.family }}"
+  when: firewall_docker_user_enabled
   tags: [firewall]
 
 - name: Tear down DOCKER-USER ruleset (rollback path)
   ansible.builtin.command: "{{ item }} -F DOCKER-USER"
   when: not firewall_docker_user_enabled
   loop: [iptables, ip6tables]
-  notify: Persist netfilter rules
   tags: [firewall, never]
 
 # --- Plex fail2ban jail -----------------------------------------------------
