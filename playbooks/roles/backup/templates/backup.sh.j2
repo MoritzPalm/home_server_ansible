@@ -16,7 +16,6 @@ export RESTIC_REPOSITORY="{{ backup_local_repo }}"
 export RESTIC_PASSWORD_FILE=/etc/restic/password
 
 start=$(date +%s)
-status=1
 
 # Always publishes a metric, including on failure, so a crashed run is visible
 # as success=0 rather than as a stale timestamp that could equally mean "the
@@ -27,7 +26,7 @@ finish() {
   cat > "${TEXTFILE}.tmp" <<EOF
 # HELP home_server_backup_success Whether the last backup run completed.
 # TYPE home_server_backup_success gauge
-home_server_backup_success ${status}
+home_server_backup_success ${success}
 # HELP home_server_backup_last_run_timestamp_seconds Unix time of the last backup run.
 # TYPE home_server_backup_last_run_timestamp_seconds gauge
 home_server_backup_last_run_timestamp_seconds ${end}
@@ -105,4 +104,4 @@ fi
 {% endif %}
 
 rm -rf "${STAGING:?}/db"
-status=0
+success=1

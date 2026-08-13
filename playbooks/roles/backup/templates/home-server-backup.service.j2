@@ -16,3 +16,9 @@ TimeoutStartSec=infinity
 # Keeps the nightly run out of the way of transcoding.
 Nice=10
 IOSchedulingClass=idle
+# systemd services have no HOME, so restic cannot find a cache directory and
+# logs "neither $XDG_CACHE_HOME nor $HOME are defined" on every run. Without a
+# cache it re-reads the repository index each time — slow locally and billable
+# off-site. CacheDirectory= creates and owns /var/cache/restic.
+CacheDirectory=restic
+Environment=XDG_CACHE_HOME=/var/cache

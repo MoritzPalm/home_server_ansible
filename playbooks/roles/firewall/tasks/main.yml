@@ -89,6 +89,12 @@
       ExecStartPre=-/sbin/ip6tables -F DOCKER-USER
       ExecStart=/sbin/iptables-restore -n /etc/iptables/docker-user.v4
       ExecStart=/sbin/ip6tables-restore -n /etc/iptables/docker-user.v6
+      # iptables-restore exits 0 for a file containing no rules, so success here
+      # does not mean the chain was populated — and an empty DOCKER-USER is an
+      # open firewall that looks healthy in systemctl status. Assert the DROP
+      # actually landed.
+      ExecStartPost=/bin/sh -c '/sbin/iptables -S DOCKER-USER | grep -q -- "-j DROP"'
+      ExecStartPost=/bin/sh -c '/sbin/ip6tables -S DOCKER-USER | grep -q -- "-j DROP"'
 
       [Install]
       WantedBy=multi-user.target
