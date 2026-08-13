@@ -53,3 +53,64 @@
   community.docker.docker_compose_v2:
     project_src: "{{ compose_root }}/arr"
     files: "arr.yml"
+
+# Containers using network_mode: container:gluetun share its network namespace.
+# When gluetun restarts, that namespace is torn down and rebuilt, and docker
+# never reattaches the dependents — they keep running with dead networking and
+# still report healthy, because their healthchecks probe localhost inside the
+# namespace that no longer routes anywhere.
+- name: Install gluetun netns guard
+  ansible.builtin.template:
+    src: gluetun-netns-guard.sh.j2
+    dest: /usr/local/bin/gluetun-netns-guard
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [arr, arr-gluetun]
+
+- name: Install gluetun netns guard unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/gluetun-netns-guard.service
+    mode: "0644"
+    content: |
+      # Managed by Ansible (roles/arr) — edits are overwritten.
+      [Unit]
+      Description=Restart containers stranded by a gluetun restart
+      After=docker.service
+      Requires=docker.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/gluetun-netns-guard
+  tags: [arr, arr-gluetun]
+
+- name: Install gluetun netns guard timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/gluetun-netns-guard.timer
+    mode: "0644"
+    content: |
+      # Managed by Ansible (roles/arr) — edits are overwritten.
+      [Unit]
+      Description=Check for containers stranded by a gluetun restart
+
+      [Timer]
+      OnBootSec=2min
+      OnUnitActiveSec=2min
+
+      [Install]
+      WantedBy=timers.target
+  tags: [arr, arr-gluetun]
+
+- name: Enable gluetun netns guard timer
+  ansible.builtin.systemd:
+    name: gluetun-netns-guard.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [arr, arr-gluetun]
+
+- name: Run the guard now
+  ansible.builtin.command: /usr/local/bin/gluetun-netns-guard
+  register: arr_netns_guard
+  changed_when: arr_netns_guard.stdout | length > 0
+  tags: [arr, arr-gluetun]

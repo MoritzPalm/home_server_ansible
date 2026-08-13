@@ -1,0 +1,29 @@
+#!/bin/bash
+# Managed by Ansible (roles/arr) — edits on the host are overwritten.
+#
+# Containers using network_mode: container:gluetun share its network namespace.
+# A gluetun restart tears that namespace down and rebuilds it, and docker never
+# reattaches the dependents: they keep running with dead networking while still
+# reporting healthy, because their healthchecks probe localhost inside the
+# namespace that no longer routes.
+#
+# Anything started before gluetun is stranded. Restart only those.
+
+set -euo pipefail
+
+docker inspect gluetun >/dev/null 2>&1 || exit 0
+
+gluetun_id=$(docker inspect gluetun --format '{{ '{{' }} .Id {{ '}}' }}')
+gluetun_started=$(docker inspect gluetun --format '{{ '{{' }} .State.StartedAt {{ '}}' }}')
+
+# ISO-8601 UTC from docker is fixed-width, so a string compare is a time compare.
+for c in $(docker ps --format '{{ '{{' }} .Names {{ '}}' }}'); do
+  [ "$c" = gluetun ] && continue
+  [ "$(docker inspect "$c" --format '{{ '{{' }} .HostConfig.NetworkMode {{ '}}' }}')" = "container:${gluetun_id}" ] || continue
+
+  started=$(docker inspect "$c" --format '{{ '{{' }} .State.StartedAt {{ '}}' }}')
+  if [[ "$started" < "$gluetun_started" ]]; then
+    echo "restarting ${c}: started ${started}, gluetun restarted ${gluetun_started}"
+    docker restart "$c" >/dev/null
+  fi
+done
