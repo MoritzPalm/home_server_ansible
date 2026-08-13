@@ -210,23 +210,12 @@
 # it — which is why f2b-plex is declared here but its bans survive. The explicit
 # "-F DOCKER-USER" is what makes this idempotent on re-runs.
 - name: Write DOCKER-USER restore files
-  ansible.builtin.copy:
+  ansible.builtin.template:
+    src: docker-user.j2
     dest: "/etc/iptables/docker-user.{{ item.family }}"
     owner: root
     group: root
     mode: "0640"
-    # One join rather than {% %} blocks or conditional line fragments: block tags
-    # emit stray blank lines unless trim_blocks is on, and iptables-restore
-    # rejects blank lines. No "-F DOCKER-USER" line — the unit flushes with the
-    # iptables binary first, because iptables-restore rejects -F as a rule.
-    content: |
-      # Managed by Ansible (roles/firewall) — edits are overwritten.
-      *filter
-      {{ ([':DOCKER-USER - [0:0]']
-          + ([':' ~ firewall_ban_chain ~ ' - [0:0]'] if plex_fail2ban_enabled else [])
-          + (item.rules | map('regex_replace', '^', '-A DOCKER-USER ') | list))
-         | join('\n') }}
-      COMMIT
   loop:
     - { family: v4, rules: "{{ docker_user_rules_v4 }}" }
     - { family: v6, rules: "{{ docker_user_rules_v6 }}" }

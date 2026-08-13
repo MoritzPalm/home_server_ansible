@@ -1,0 +1,19 @@
+#jinja2: trim_blocks: True, lstrip_blocks: True
+# Managed by Ansible (roles/firewall) — edits on the host are overwritten.
+#
+# Replayed after docker by docker-user-restore.service. Only this chain: the
+# rest of the ruleset belongs to docker, tailscale and ufw, which rebuild it.
+#
+# A real template rather than an inline "content:" string, because Ansible does
+# not interpret \n escapes in Jinja string literals — join('\n') there produces
+# a single line with literal backslash-n, which iptables-restore accepts as one
+# malformed chain declaration and then applies no rules at all, exiting 0.
+*filter
+:DOCKER-USER - [0:0]
+{% if plex_fail2ban_enabled %}
+:{{ firewall_ban_chain }} - [0:0]
+{% endif %}
+{% for rule in item.rules %}
+-A DOCKER-USER {{ rule }}
+{% endfor %}
+COMMIT
