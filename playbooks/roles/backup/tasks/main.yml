@@ -47,7 +47,51 @@
     group: root
     mode: "0400"
   no_log: true
-  when: backup_offsite_repo | length > 0
+  when:
+    - backup_offsite_repo | length > 0
+    - backup_offsite_env | length > 0
+  tags: [backup]
+
+- name: Generate the off-site SSH key
+  community.crypto.openssh_keypair:
+    path: "{{ backup_offsite_ssh_key }}"
+    # RSA, not ed25519: Hetzner Storage Boxes run ProFTPD mod_sftp, which
+    # rejects ed25519 keys.
+    type: rsa
+    size: 4096
+    comment: "restic-backup@{{ inventory_hostname }}"
+    regenerate: never
+    owner: root
+    group: root
+    mode: "0600"
+  when: backup_offsite_ssh_host | length > 0
+  tags: [backup]
+
+- name: Configure ssh for the off-site host
+  ansible.builtin.blockinfile:
+    path: /root/.ssh/config
+    create: true
+    owner: root
+    group: root
+    mode: "0600"
+    marker: "# {mark} ANSIBLE MANAGED — off-site backup"
+    block: |
+      Host {{ backup_offsite_ssh_host }}
+          User {{ backup_offsite_ssh_user }}
+          Port {{ backup_offsite_ssh_port }}
+          IdentityFile {{ backup_offsite_ssh_key }}
+          IdentitiesOnly yes
+  when: backup_offsite_ssh_host | length > 0
+  tags: [backup]
+
+- name: Trust the off-site host key
+  ansible.builtin.known_hosts:
+    path: /root/.ssh/known_hosts
+    name: "[{{ backup_offsite_ssh_host }}]:{{ backup_offsite_ssh_port }}"
+    key: "{{ lookup('pipe', 'ssh-keyscan -p ' ~ backup_offsite_ssh_port ~ ' ' ~ backup_offsite_ssh_host ~ ' 2>/dev/null | grep ssh-ed25519 | head -1') }}"
+    state: present
+  when: backup_offsite_ssh_host | length > 0
+  failed_when: false
   tags: [backup]
 
 - name: Create backup directories
@@ -94,7 +138,7 @@
 - name: Check whether the off-site repository is initialised
   ansible.builtin.shell:
     cmd: |
-      set -a; . /etc/restic/offsite.env; set +a
+      [ -r /etc/restic/offsite.env ] && { set -a; . /etc/restic/offsite.env; set +a; }
       restic -r "{{ backup_offsite_repo }}" cat config
   environment:
     RESTIC_PASSWORD_FILE: /etc/restic/password
@@ -107,7 +151,7 @@
 - name: Initialise off-site repository
   ansible.builtin.shell:
     cmd: |
-      set -a; . /etc/restic/offsite.env; set +a
+      [ -r /etc/restic/offsite.env ] && { set -a; . /etc/restic/offsite.env; set +a; }
       restic -r "{{ backup_offsite_repo }}" init
   environment:
     RESTIC_PASSWORD_FILE: /etc/restic/password

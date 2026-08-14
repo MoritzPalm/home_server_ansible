@@ -11,7 +11,16 @@ backup_offsite_repo: "{{ vault_restic_offsite_repo | default('') }}"
 
 # Backend credentials, e.g. B2_ACCOUNT_ID / B2_ACCOUNT_KEY or
 # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY. Written to a 0400 env file.
+# Leave empty for SFTP, which authenticates with the SSH key below instead.
 backup_offsite_env: "{{ vault_restic_offsite_env | default({}) }}"
+
+# SFTP backends only (Hetzner Storage Box). Empty disables all ssh management.
+# The private key never leaves the host and is NOT vaulted: it is regenerable —
+# a rebuild makes a new one and registers it — unlike the restic password.
+backup_offsite_ssh_host: "{{ vault_restic_offsite_ssh_host | default('') }}"
+backup_offsite_ssh_user: "{{ vault_restic_offsite_ssh_user | default('') }}"
+backup_offsite_ssh_port: 22
+backup_offsite_ssh_key: /root/.ssh/storagebox
 
 backup_staging: /srv/data/backup-staging
 backup_schedule: "02:30"

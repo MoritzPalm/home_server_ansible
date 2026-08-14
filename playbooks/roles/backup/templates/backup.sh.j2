@@ -68,9 +68,12 @@ restic backup \
 restic forget --tag automated {{ backup_retention }} --prune
 
 {% if backup_offsite_repo | length > 0 %}
-set -a
-. /etc/restic/offsite.env
-set +a
+# SFTP backends have no env credentials, so the file may not exist.
+if [ -r /etc/restic/offsite.env ]; then
+  set -a
+  . /etc/restic/offsite.env
+  set +a
+fi
 export RESTIC_FROM_PASSWORD_FILE=/etc/restic/password
 
 OFFSITE=(-r "{{ backup_offsite_repo }}"{% if backup_offsite_storage_class | length > 0 %} -o "s3.storage-class={{ backup_offsite_storage_class }}"{% endif %})
