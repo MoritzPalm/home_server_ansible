@@ -17,6 +17,15 @@ http:
         - websecure
       service: api@internal
       middlewares:
+        - chain-sso@file
+
+    outpost-dashboard:
+      rule: "Host(`traefik.{{ internal_domain }}`) && PathPrefix(`/outpost.goauthentik.io/`)"
+      priority: 100
+      entryPoints:
+        - websecure
+      service: authentik-outpost@file
+      middlewares:
         - chain-public@file
 
     # Catch-all for anything that matches no other router on the public

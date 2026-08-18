@@ -55,6 +55,7 @@
     group: docker
     mode: "0640"
     content: "{{ portainer_admin_password }}"
+  no_log: true
 
 - name: create env file for portainer
   copy:
@@ -66,6 +67,7 @@
       HOST_IP={{ host_ip }}
       ADMIN_PASSWORD_FILE={{ compose_root }}/portainer/admin_password.txt
       PORTAINER_LICENSE_KEY={{ portainer_license_key }}
+  no_log: true
 
 - name: Create shared Docker networks
   community.docker.docker_network:

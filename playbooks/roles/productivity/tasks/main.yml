@@ -63,6 +63,7 @@
       COMPOSE_ROOT={{ compose_root }}
       VIKUNJA_POSTGRES_PASSWORD={{ vikunja_postgres_password }}
       DATABASE_DIR={{ database_dir }}
+  no_log: true
   tags:
     - productivity
 

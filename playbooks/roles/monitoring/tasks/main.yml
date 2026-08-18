@@ -232,6 +232,7 @@
       GRAFANA_ADMIN_PASSWORD={{ grafana_admin_password }}
       WATCHTOWER_DISCORD_TOKEN={{ watchtower_discord_token }}
       WATCHTOWER_DISCORD_WEBHOOKID={{ watchtower_discord_id }}
+  no_log: true
   tags:
     - monitoring
 

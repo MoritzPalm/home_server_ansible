@@ -1,6 +1,12 @@
 timezone: Europe/Berlin
 admin_user: moritzpalm
 
+docker_daemon_options:
+  log-driver: json-file
+  log-opts:
+    max-size: "10m"
+    max-file: "3"
+
 # Branch of home_server_compose deployed to /srv/compose. Override per-run with
 #   -e compose_branch=feat/public-ingress
 # to test a branch; omit the flag to roll back to main.
@@ -96,7 +102,6 @@ cloudflared_ingress_hosts:
 authentik_forward_auth_hosts:
   - "{{ tunnel_hosts.homepage }}"
   - "{{ tunnel_hosts.hevy }}"
-  - "{{ tunnel_hosts.immich }}"
 
 paperless_path: /mnt/storage/documents
 

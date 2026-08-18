@@ -53,13 +53,47 @@
     mode: "0644"
     content: |
       [DEFAULT]
-      ignoreip = 192.168.178.0/24 127.0.0.1
+      ignoreip = 127.0.0.1/8 ::1 100.64.0.0/10
       [sshd]
       enabled = true
       port = ssh
       maxretry = 4
       backend = systemd
   notify: Restart fail2ban
+
+- name: Enable unattended security upgrades
+  copy:
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    mode: "0644"
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+      APT::Periodic::AutocleanInterval "7";
+
+- name: Configure what unattended-upgrades is allowed to install
+  copy:
+    dest: /etc/apt/apt.conf.d/52unattended-upgrades-local
+    mode: "0644"
+    content: |
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Remove-Unused-Dependencies "true";
+      Unattended-Upgrade::Automatic-Reboot "false";
+
+- name: Ensure the APT timers are actually running
+  systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - apt-daily.timer
+    - apt-daily-upgrade.timer
+
+- name: Verify unattended-upgrades would run
+  ansible.builtin.command: unattended-upgrades --dry-run --debug
+  register: base_unattended_dryrun
+  changed_when: false
+  failed_when: base_unattended_dryrun.rc != 0
 
 - name: Disable and mask unused Samba services
   systemd:

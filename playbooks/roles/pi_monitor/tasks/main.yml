@@ -1,3 +1,16 @@
+- name: Get the Pi's tailnet address
+  ansible.builtin.command: tailscale ip -4
+  register: pi_tailscale_ip_raw
+  changed_when: false
+  tags:
+    - pi_monitor
+
+- name: Set the tailnet bind address for published ports
+  ansible.builtin.set_fact:
+    pi_tailscale_ip: "{{ pi_tailscale_ip_raw.stdout_lines | first | trim }}"
+  tags:
+    - pi_monitor
+
 - name: Ensure Uptime Kuma compose dir exists
   ansible.builtin.file:
     path: "{{ compose_root }}/uptime-kuma"
@@ -37,7 +50,8 @@
 
 - name: Wait for Uptime Kuma to be up
   ansible.builtin.uri:
-    url: "http://127.0.0.1:{{ uptime_kuma_port }}/"
+    # Not 127.0.0.1: the port is published on the tailnet address only.
+    url: "http://{{ pi_tailscale_ip }}:{{ uptime_kuma_port }}/"
     method: GET
     status_code: 200
   register: kuma_health

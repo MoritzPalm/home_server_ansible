@@ -24,6 +24,7 @@
       LOG_LEVEL="INFO"
       RECAPTCHA_SITE_KEY="6LfkQG0jAAAAANTrIkVXKPfSPHyJnt4hYPWqxh0R"
       COOKIE_SECURE="false"
+  no_log: true
   tags:
     - hevy
     - hevy-deploy

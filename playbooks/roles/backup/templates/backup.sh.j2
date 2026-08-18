@@ -12,10 +12,12 @@ set -euo pipefail
 
 STAGING="{{ backup_staging }}"
 TEXTFILE="{{ backup_textfile_dir }}/backup.prom"
+CHECK_TEXTFILE="{{ backup_textfile_dir }}/backup_check.prom"
 export RESTIC_REPOSITORY="{{ backup_local_repo }}"
 export RESTIC_PASSWORD_FILE=/etc/restic/password
 
 start=$(date +%s)
+success=0
 
 # Always publishes a metric, including on failure, so a crashed run is visible
 # as success=0 rather than as a stale timestamp that could equally mean "the
@@ -37,6 +39,32 @@ EOF
   mv "${TEXTFILE}.tmp" "${TEXTFILE}"
 }
 trap finish EXIT
+
+run_check() {
+  local label=$1; shift
+  local rc=0
+  echo "Running restic check (${label})..." >&2
+  "$@" || rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "WARNING: restic check (${label}) FAILED with rc=${rc}" >&2
+  fi
+  cat >> "${CHECK_TEXTFILE}.tmp" <<EOF
+home_server_backup_check_success{repo="${label}"} $([ "$rc" -eq 0 ] && echo 1 || echo 0)
+home_server_backup_check_timestamp_seconds{repo="${label}"} $(date +%s)
+EOF
+}
+
+if [ "$(date +%u)" = "6" ]; then
+  cat > "${CHECK_TEXTFILE}.tmp" <<'EOF'
+# HELP home_server_backup_check_success Whether the last restic check passed.
+# TYPE home_server_backup_check_success gauge
+# HELP home_server_backup_check_timestamp_seconds Unix time of the last restic check.
+# TYPE home_server_backup_check_timestamp_seconds gauge
+EOF
+  RUN_CHECKS=1
+else
+  RUN_CHECKS=0
+fi
 
 rm -rf "${STAGING:?}/db"
 mkdir -p "${STAGING}/db"
@@ -66,6 +94,10 @@ restic backup \
   --exclude-caches
 
 restic forget --tag automated {{ backup_retention }} --prune
+
+if [ "$RUN_CHECKS" = "1" ]; then
+  run_check local restic check --read-data-subset=5%
+fi
 
 {% if backup_offsite_repo | length > 0 %}
 # SFTP backends have no env credentials, so the file may not exist.
@@ -104,7 +136,17 @@ restic "${OFFSITE[@]}" forget {{ backup_bulk_retention }} --tag bulk
 if [ "$(date +%u)" = "7" ]; then
   restic "${OFFSITE[@]}" prune --max-repack-size 2G
 fi
+
+
+if [ "$RUN_CHECKS" = "1" ]; then
+  run_check offsite restic "${OFFSITE[@]}" check
+fi
 {% endif %}
+
+
+if [ "$RUN_CHECKS" = "1" ]; then
+  mv "${CHECK_TEXTFILE}.tmp" "${CHECK_TEXTFILE}"
+fi
 
 rm -rf "${STAGING:?}/db"
 success=1

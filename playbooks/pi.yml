@@ -1,7 +1,35 @@
-
 - hosts: monitor
   become: true
+
+  pre_tasks:
+    - name: Read the WireGuard config
+      ansible.builtin.slurp:
+        src: "/etc/wireguard/{{ pi_wireguard_interface }}.conf"
+      register: pi_wg_conf
+      failed_when: false
+      when: pi_wireguard_interface is defined
+      tags: [pi_wireguard, firewall]
+
+    - name: Find the WireGuard listen port, if the tunnel listens at all
+      ansible.builtin.set_fact:
+        pi_wg_listen_port: >-
+          {{ (pi_wg_conf.content | b64decode
+              | regex_search('(?im)^\s*ListenPort\s*=\s*(\d+)', '\1')
+              | default([], true) | first | default('', true)) }}
+      when: pi_wg_conf.content is defined
+      tags: [pi_wireguard, firewall]
+
+    - name: Allow the WireGuard listen port through UFW
+      community.general.ufw:
+        rule: allow
+        port: "{{ pi_wg_listen_port }}"
+        proto: udp
+        comment: "WireGuard {{ pi_wireguard_interface }}"
+      when: pi_wg_listen_port | default('') | length > 0
+      tags: [pi_wireguard, firewall]
+
   roles:
-    - tailscale 
-    - geerlingguy.docker 
-    - pi_monitor 
+    - tailscale
+    - geerlingguy.docker
+    - base
+    - pi_monitor

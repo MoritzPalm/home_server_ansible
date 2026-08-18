@@ -18,6 +18,7 @@
       ABR_PASSWORD={{ abr_password }}
       SOULSEEK_PATH={{ soulseek_path }}
       SLSKD_UMASK=0022
+  no_log: true
 
 - name: create yml config file for soulseek
   copy:
@@ -47,7 +48,7 @@
             soularr_api_key:
               key: {{ slskd_api_key }}
               #cidr: 129.168.178.0/24
-      
+  no_log: true
 
 - name: run arr compose file
   community.docker.docker_compose_v2:

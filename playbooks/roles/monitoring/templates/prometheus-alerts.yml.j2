@@ -255,6 +255,24 @@ groups:
           summary: "Last backup run failed"
           description: "Check 'journalctl -u home-server-backup.service'."
 
+      - alert: BackupCheckFailing
+        expr: home_server_backup_check_success == 0
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "restic check failed on the {{ $labels.repo }} repository"
+          description: "The repository is damaged; restores may be impossible. Run 'restic check --read-data' against {{ $labels.repo }} to see the extent."
+
+      - alert: BackupCheckStale
+        expr: time() - home_server_backup_check_timestamp_seconds > 777600
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "No restic check on {{ $labels.repo }} for {{ $value | humanizeDuration }}"
+          description: "Weekly integrity verification is not running; corruption would go undetected."
+
   # Everything reachable from the internet depends on this group. A silent
   # failure here means either an outage or a hole, so these are deliberately
   # noisier than the host rules.

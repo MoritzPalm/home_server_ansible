@@ -41,6 +41,8 @@
       CONFIG_PATH={{ config_path }}
       DATABASE_DIR={{ database_dir }}
       MEDIA_PATH={{ media_path }}
+      FDC_API_KEY={{ tandoor_fdc_api_key }}
+  no_log: true
   tags:
       - kitchen
 
@@ -48,5 +50,52 @@
   community.docker.docker_compose_v2:
     project_src: "{{ compose_root }}/kitchen"
     files: kitchen.yml
+  tags:
+    - kitchen
+
+- name: Wait for tandoor to become healthy
+  community.docker.docker_container_info:
+    name: tandoor
+  register: tandoor_info
+  retries: 30
+  delay: 10
+  until:
+    - tandoor_info.exists
+    - tandoor_info.container.State.Health.Status | default('') == 'healthy'
+  failed_when: false
+  tags:
+    - kitchen
+
+- name: Fail if tandoor did not become healthy
+  ansible.builtin.fail:
+    msg: >-
+      tandoor is {{ tandoor_info.container.State.Health.Status
+                    | default('not running') }} after 5 minutes.
+      Traefik will not route to it. Check: docker logs tandoor
+  when: tandoor_info.container.State.Health.Status | default('') != 'healthy'
+  tags:
+    - kitchen
+
+- name: Seed tandoor open data and import automations
+  community.docker.docker_container_exec:
+    container: tandoor
+    chdir: /opt/recipes
+    command: /opt/recipes/venv/bin/python manage.py shell
+    stdin: "{{ lookup('template', 'tandoor_bootstrap.py.j2') }}"
+  register: tandoor_bootstrap
+  changed_when: >-
+    (tandoor_bootstrap.stdout
+     | regex_search('TANDOOR_BOOTSTRAP_RESULT (.*)', '\\1')
+     | first | from_json).changed
+  tags:
+    - kitchen
+
+- name: Show what the tandoor seed changed
+  ansible.builtin.debug:
+    msg: >-
+      {{ (tandoor_bootstrap.stdout
+          | regex_search('TANDOOR_BOOTSTRAP_RESULT (.*)', '\\1')
+          | first | from_json) }}
+  when: tandoor_bootstrap is changed
   tags:
     - kitchen
