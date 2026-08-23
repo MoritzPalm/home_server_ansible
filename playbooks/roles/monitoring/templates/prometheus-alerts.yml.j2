@@ -204,6 +204,30 @@ groups:
           summary: "Container {{ $labels.name }} restart looping"
           description: "Container {{ $labels.name }} has restarted repeatedly in the last few minutes."
 
+      # cAdvisor exposes resource usage but no healthcheck verdict, so a
+      # container that keeps running while its healthcheck fails is invisible
+      # to it. 
+      # These two read the container-health textfile collector.
+      - alert: ContainerUnhealthy
+        expr: home_server_container_health == 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} is unhealthy"
+          description: "Docker's healthcheck for {{ $labels.name }} has failed for 10 minutes while the container kept running. Check 'docker logs {{ $labels.name }}'."
+
+      # The script leaves the previous file in place when it fails, so staleness
+      # rather than absence is what shows the collector has stopped working.
+      - alert: ContainerHealthMetricsStale
+        expr: time() - node_textfile_mtime_seconds{file="container_health.prom"} > 900
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container health metrics are {{ $value | humanizeDuration }} old"
+          description: "container-health-metrics.timer is not running or is failing; an unhealthy container would go unnoticed."
+
   - name: services
     interval: 60s
     rules:

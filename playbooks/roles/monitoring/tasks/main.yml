@@ -258,3 +258,78 @@
   until: grafana_health.status == 200
   tags:
     - monitoring
+
+# --- Container health metrics ---
+
+# Created here as well as in the backup role: node-exporter bind-mounts this
+# path, and the backup role runs later in site.yml.
+- name: Create node-exporter textfile directory
+  ansible.builtin.file:
+    path: "{{ backup_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags:
+    - monitoring
+
+- name: Install container health metrics script
+  ansible.builtin.template:
+    src: container-health.sh.j2
+    dest: /usr/local/bin/container-health-metrics
+    owner: root
+    group: root
+    mode: "0755"
+  tags:
+    - monitoring
+
+- name: Install container health metrics units
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.name }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ item.content }}"
+  loop:
+    - name: container-health-metrics.service
+      content: |
+        # Managed by Ansible (roles/monitoring) — edits are overwritten.
+        [Unit]
+        Description=Publish Docker healthcheck verdicts as node-exporter metrics
+        After=docker.service
+        Requires=docker.service
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/bin/container-health-metrics
+    - name: container-health-metrics.timer
+      content: |
+        # Managed by Ansible (roles/monitoring) — edits are overwritten.
+        [Unit]
+        Description=Refresh Docker container health metrics
+
+        [Timer]
+        OnBootSec=1min
+        OnUnitActiveSec=1min
+
+        [Install]
+        WantedBy=timers.target
+  loop_control:
+    label: "{{ item.name }}"
+  tags:
+    - monitoring
+
+- name: Enable container health metrics timer
+  ansible.builtin.systemd:
+    name: container-health-metrics.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags:
+    - monitoring
+
+- name: Publish container health metrics now
+  ansible.builtin.command: /usr/local/bin/container-health-metrics
+  changed_when: true
+  tags:
+    - monitoring

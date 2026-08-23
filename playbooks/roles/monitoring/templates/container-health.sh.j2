@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Managed by Ansible (roles/monitoring) — edits on the host are overwritten.
+#
+# cAdvisor reports resource usage but not Docker's healthcheck verdict, so a
+# container that is still "running" while its healthcheck fails is invisible to
+# Prometheus. gluetun sat that way for 36 hours with a collapsed VPN tunnel
+# before anyone noticed. This publishes the verdict as textfile metrics.
+
+set -euo pipefail
+
+TEXTFILE="{{ backup_textfile_dir }}/container_health.prom"
+
+emit() {
+  cat <<'EOF'
+# HELP home_server_container_running Whether the container is in the running state.
+# TYPE home_server_container_running gauge
+# HELP home_server_container_health Docker healthcheck verdict: 1 healthy, 0 unhealthy, -1 starting. Absent for containers that define no healthcheck.
+# TYPE home_server_container_health gauge
+EOF
+
+  # One inspect for all containers rather than one per name: this runs every
+  # minute and the daemon round-trip is the expensive part.
+  docker ps --all --quiet \
+    | xargs --no-run-if-empty docker inspect \
+        --format '{% raw %}{{.Name}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}{% endraw %}' \
+    | while read -r name state health; do
+        name=${name#/}
+        if [ "$state" = "running" ]; then
+          echo "home_server_container_running{name=\"${name}\"} 1"
+        else
+          echo "home_server_container_running{name=\"${name}\"} 0"
+        fi
+        case "$health" in
+          healthy)   echo "home_server_container_health{name=\"${name}\"} 1" ;;
+          unhealthy) echo "home_server_container_health{name=\"${name}\"} 0" ;;
+          # -1 rather than 0 so a container still inside its start_period does
+          # not trip the unhealthy alert every time the stack is redeployed.
+          starting)  echo "home_server_container_health{name=\"${name}\"} -1" ;;
+        esac
+      done
+}
+
+# Written via .tmp and renamed so node-exporter never reads a half-written file.
+# On failure the previous file is deliberately left in place: stale metrics are
+# caught by ContainerHealthMetricsStale, whereas a truncated file would silently
+# read as "no containers are unhealthy".
+emit > "${TEXTFILE}.tmp"
+chmod 0644 "${TEXTFILE}.tmp"
+mv "${TEXTFILE}.tmp" "${TEXTFILE}"
