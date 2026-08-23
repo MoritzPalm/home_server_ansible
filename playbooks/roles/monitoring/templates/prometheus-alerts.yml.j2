@@ -238,13 +238,13 @@ groups:
           description: "The backup timer or node-exporter's textfile collector is not working."
 
       - alert: BackupStale
-        expr: time() - home_server_backup_last_run_timestamp_seconds > 172800
+        expr: time() - home_server_backup_last_success_timestamp_seconds > 172800
         for: 1h
         labels:
           severity: critical
         annotations:
           summary: "Last successful backup was {{ $value | humanizeDuration }} ago"
-          description: "Backups run nightly; more than 48h without one means the timer is failing."
+          description: "Backups run nightly; more than 48h without a complete one means runs are failing or the timer is not firing."
 
       - alert: BackupFailing
         expr: home_server_backup_success == 0
@@ -253,7 +253,7 @@ groups:
           severity: critical
         annotations:
           summary: "Last backup run failed"
-          description: "Check 'journalctl -u home-server-backup.service'."
+          description: "One or more stages failed; home_server_backup_stage_success shows which. Check 'journalctl -u home-server-backup.service'."
 
       - alert: BackupCheckFailing
         expr: home_server_backup_check_success == 0

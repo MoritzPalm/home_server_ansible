@@ -18,6 +18,17 @@ export RESTIC_PASSWORD_FILE=/etc/restic/password
 
 start=$(date +%s)
 success=0
+run_failed=0
+RUN_CHECKS=0
+STAGE_OK=1
+STAGE_METRICS=""
+
+# Carried forward from the previous run so the timestamp keeps pointing at a run
+# that actually completed, which is what BackupStale measures. Absent until the
+# first success, so a freshly built host does not alert on a missing history.
+last_success=$(awk '$1 == "home_server_backup_last_success_timestamp_seconds" {print $2}' \
+  "${TEXTFILE}" 2>/dev/null || true)
+last_success=${last_success:-0}
 
 # Always publishes a metric, including on failure, so a crashed run is visible
 # as success=0 rather than as a stale timestamp that could equally mean "the
@@ -25,7 +36,11 @@ success=0
 finish() {
   local end
   end=$(date +%s)
-  cat > "${TEXTFILE}.tmp" <<EOF
+  if [ "$success" = "1" ]; then
+    last_success=$end
+  fi
+  {
+    cat <<EOF
 # HELP home_server_backup_success Whether the last backup run completed.
 # TYPE home_server_backup_success gauge
 home_server_backup_success ${success}
@@ -36,7 +51,27 @@ home_server_backup_last_run_timestamp_seconds ${end}
 # TYPE home_server_backup_duration_seconds gauge
 home_server_backup_duration_seconds $((end - start))
 EOF
+    if [ "$last_success" != "0" ]; then
+      cat <<EOF
+# HELP home_server_backup_last_success_timestamp_seconds Unix time of the last run in which every stage completed.
+# TYPE home_server_backup_last_success_timestamp_seconds gauge
+home_server_backup_last_success_timestamp_seconds ${last_success}
+EOF
+    fi
+    if [ -n "$STAGE_METRICS" ]; then
+      echo "# HELP home_server_backup_stage_success Whether each stage of the last run completed."
+      echo "# TYPE home_server_backup_stage_success gauge"
+      printf '%s' "$STAGE_METRICS"
+    fi
+  } > "${TEXTFILE}.tmp"
   mv "${TEXTFILE}.tmp" "${TEXTFILE}"
+
+  # Promoted here rather than at the end of the run: a check result that was
+  # already measured must not be discarded by a later stage failing, and a run
+  # that dies must not leave the .tmp behind for the next one to append to.
+  if [ -f "${CHECK_TEXTFILE}.tmp" ]; then
+    mv "${CHECK_TEXTFILE}.tmp" "${CHECK_TEXTFILE}"
+  fi
 }
 trap finish EXIT
 
@@ -52,6 +87,30 @@ run_check() {
 home_server_backup_check_success{repo="${label}"} $([ "$rc" -eq 0 ] && echo 1 || echo 0)
 home_server_backup_check_timestamp_seconds{repo="${label}"} $(date +%s)
 EOF
+}
+
+# Stages are isolated from each other: an off-site failure must not stop the
+# bulk upload, and each outcome is published separately so "the photos have not
+# gone off-site" is distinguishable from "nothing was backed up at all".
+#
+# The subshell re-arms set -e. Calling the function as 'stage_x || rc=$?' would
+# disable it for every command inside, so a failed 'restic backup' would be
+# followed by a 'forget --prune' against the snapshot it did not make.
+run_stage() {
+  local name=$1
+  local rc=0
+  echo "=== stage ${name} ===" >&2
+  set +e
+  ( set -e; "stage_${name}" )
+  rc=$?
+  set -e
+  STAGE_OK=1
+  if [ "$rc" -ne 0 ]; then
+    echo "ERROR: backup stage ${name} failed with rc=${rc}" >&2
+    run_failed=1
+    STAGE_OK=0
+  fi
+  STAGE_METRICS+="home_server_backup_stage_success{stage=\"${name}\"} ${STAGE_OK}"$'\n'
 }
 
 if [ "$(date +%u)" = "6" ]; then
@@ -80,24 +139,32 @@ else
 fi
 {% endfor %}
 
-# --one-file-system stops the mergerfs pool being walked through a bind mount.
-restic backup \
-  --one-file-system \
-  --tag automated \
-  "${STAGING}/db" \
+stage_local() {
+  # A run killed mid-flight (OOM, reboot, SIGKILL) leaves a lock behind that
+  # every later run would fail on. Only stale locks are removed.
+  restic unlock
+
+  # --one-file-system stops the mergerfs pool being walked through a bind mount.
+  restic backup \
+    --one-file-system \
+    --tag automated \
+    "${STAGING}/db" \
 {% for p in backup_paths %}
-  "{{ p }}" \
+    "{{ p }}" \
 {% endfor %}
 {% for e in backup_excludes | default([]) %}
-  --exclude "{{ e }}" \
+    --exclude "{{ e }}" \
 {% endfor %}
-  --exclude-caches
+    --exclude-caches
 
-restic forget --tag automated {{ backup_retention }} --prune
+  restic forget --tag automated {{ backup_retention }} --prune
 
-if [ "$RUN_CHECKS" = "1" ]; then
-  run_check local restic check --read-data-subset=5%
-fi
+  if [ "$RUN_CHECKS" = "1" ]; then
+    run_check local restic check --read-data-subset=5%
+  fi
+}
+
+run_stage local
 
 {% if backup_offsite_repo | length > 0 %}
 # SFTP backends have no env credentials, so the file may not exist.
@@ -110,43 +177,69 @@ export RESTIC_FROM_PASSWORD_FILE=/etc/restic/password
 
 OFFSITE=(-r "{{ backup_offsite_repo }}"{% if backup_offsite_storage_class | length > 0 %} -o "s3.storage-class={{ backup_offsite_storage_class }}"{% endif %})
 
-# 'restic copy' transfers the snapshots just made without re-reading the
-# sources, so the databases are dumped once.
-restic "${OFFSITE[@]}" --from-repo "{{ backup_local_repo }}" copy --tag automated
-restic "${OFFSITE[@]}" forget {{ backup_retention }} --tag automated
+stage_offsite() {
+  # A dropped connection leaves a lock restic cannot delete, because the
+  # transport it would delete it over is already gone. Without this sweep that
+  # lock wedges every subsequent run indefinitely: the nightly job keeps
+  # failing on a repository nothing is actually using. Only locks whose creating
+  # process is gone are removed, so a genuinely concurrent run is left alone.
+  restic "${OFFSITE[@]}" unlock
+
+  # 'restic copy' transfers the snapshots just made without re-reading the
+  # sources, so the databases are dumped once.
+  restic "${OFFSITE[@]}" --from-repo "{{ backup_local_repo }}" copy --tag automated
+  restic "${OFFSITE[@]}" forget {{ backup_retention }} --tag automated
+}
+
+run_stage offsite
+offsite_ok=$STAGE_OK
 
 {% if backup_bulk_paths | length > 0 %}
 # Bulk data goes direct to off-site, never into the local repo: the originals
 # already live in the same pool /mnt/backups is a bind mount of.
-restic "${OFFSITE[@]}" backup \
-  --one-file-system \
-  --tag bulk \
+#
+# Deliberately attempted even when the stage above failed: this is the only copy
+# of the photos and scanned documents, so it is the last thing to give up on.
+stage_bulk() {
+  restic "${OFFSITE[@]}" backup \
+    --one-file-system \
+    --tag bulk \
 {% for p in backup_bulk_paths %}
-  "{{ p }}" \
+    "{{ p }}" \
 {% endfor %}
-  --exclude-caches
+    --exclude-caches
 
-restic "${OFFSITE[@]}" forget {{ backup_bulk_retention }} --tag bulk
+  restic "${OFFSITE[@]}" forget {{ backup_bulk_retention }} --tag bulk
+}
+
+run_stage bulk
 {% endif %}
 
 # Prune rewrites pack files, which on a remote repo of this size means
 # downloading and re-uploading data — billable on every provider and slow. Once
 # a week is enough to reclaim space from forgotten snapshots; 'forget' above
 # runs nightly and is metadata-only.
-if [ "$(date +%u)" = "7" ]; then
+stage_offsite_prune() {
   restic "${OFFSITE[@]}" prune --max-repack-size 2G
-fi
+}
 
+# Both skipped when the repository could not be reached at all: maintenance on
+# a repo we just failed to talk to only turns a network fault into a second
+# alert, and a check reporting 0 reads as "the repository is damaged".
+if [ "$offsite_ok" = "1" ]; then
+  if [ "$(date +%u)" = "7" ]; then
+    run_stage offsite_prune
+  fi
 
-if [ "$RUN_CHECKS" = "1" ]; then
-  run_check offsite restic "${OFFSITE[@]}" check
+  if [ "$RUN_CHECKS" = "1" ]; then
+    run_check offsite restic "${OFFSITE[@]}" check
+  fi
 fi
 {% endif %}
 
-
-if [ "$RUN_CHECKS" = "1" ]; then
-  mv "${CHECK_TEXTFILE}.tmp" "${CHECK_TEXTFILE}"
-fi
-
 rm -rf "${STAGING:?}/db"
-success=1
+
+if [ "$run_failed" -eq 0 ]; then
+  success=1
+fi
+exit "$run_failed"
