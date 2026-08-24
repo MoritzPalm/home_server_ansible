@@ -93,8 +93,8 @@
       MS_PLEX_TOKEN={{ plex_token }}
       MS_PLEX_USER={{ ms_plex_user }}
       MS_LISTENBRAINZ_TOKEN={{ ms_listenbrainz_token }}
-  no_log: true
       MS_LISTENBRAINZ_USER={{ ms_listenbrainz_user }}
+  no_log: true
   tags:
     - media
 
