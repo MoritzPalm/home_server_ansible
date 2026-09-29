@@ -1,0 +1,8 @@
+# Handlers run at the end of the play, after main.yml has brought the compose
+# stack up — so the container is guaranteed to exist by the time this fires,
+# including on a first run against a fresh host.
+- name: Restart soulsync
+  community.docker.docker_container:
+    name: soulsync
+    state: started
+    restart: true

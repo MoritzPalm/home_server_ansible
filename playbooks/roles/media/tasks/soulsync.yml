@@ -9,6 +9,8 @@
     - music
     - soulsync
 
+# soulsync reads config.json only at startup, so a change here has to be
+# followed by a restart to take effect.
 - name: create soulsync config from template FIRST
   ansible.builtin.template:
     src: templates/soulsync_config.json.j2
@@ -16,7 +18,7 @@
     owner: "{{ admin_user }}"
     group: docker
     mode: "0640"
-  register: soulsync_config_changed
+  notify: Restart soulsync
   tags:
     - media
     - soulsync
@@ -32,13 +34,10 @@
     - media
     - soulsync
 
-# CRITICAL: Remove database when config changes to force re-migration
-- name: Remove existing soulsync database to force config reload
-  ansible.builtin.file:
-    path: "{{ database_dir }}/soulsync/music_library.db"
-    state: absent
-  when: soulsync_config_changed.changed
-  tags:
-    - media
-    - soulsync
+# There used to be a task here that deleted music_library.db whenever the
+# config changed, to force a re-migration. Never do that: the schema is created
+# only at startup, so deleting the file under a running container leaves a
+# schema-less database and every page fails with "no such table: artists" — and
+# it destroys the scanned library (1.6 GB, ~1300 artists) along the way. The
+# restart handler above is what actually reloads the config.
 
