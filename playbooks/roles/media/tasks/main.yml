@@ -90,6 +90,7 @@
       DB_PASSWORD={{ immich_db_password }}
       MS_SPOTIFY_CLIENT_ID={{ ms_spotify_client_id }}
       MS_SPOTIFY_CLIENT_SECRET={{ ms_spotify_client_secret }}
+      PLEX_URL={{ plex_secure_url }}
       MS_PLEX_TOKEN={{ plex_token }}
       MS_PLEX_USER={{ ms_plex_user }}
       MS_LISTENBRAINZ_TOKEN={{ ms_listenbrainz_token }}

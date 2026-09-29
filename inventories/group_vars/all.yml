@@ -44,6 +44,18 @@ tailscale_operator: "moritzpalm"
 
 plex_url: "100.78.131.48:32401"
 
+# Plex 1.43 refuses plaintext HTTP from anything but its own loopback ("Request:
+# plaintext connection from <ip> rejected because secure connections are
+# required"), so http://plex:32400 no longer works from another container. Its
+# certificate is valid only for *.<CertificateUUID>.plex.direct, and plex.direct
+# DNS resolves a hyphenated-IP label back to that address — so this is the one
+# URL that both reaches Plex and passes certificate verification.
+#
+# lan_ip, not the container IP: docker assigns the latter dynamically. Resolving
+# it needs public DNS, which is why the address is embedded in the label rather
+# than looked up.
+plex_secure_url: "https://{{ lan_ip | replace('.', '-') }}.{{ plex_certificate_uuid }}.plex.direct:32400"
+
 # --- public ingress -----------------------------------------------------------
 lan_subnet: 192.168.178.0/24
 

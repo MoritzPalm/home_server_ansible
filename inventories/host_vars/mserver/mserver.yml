@@ -12,6 +12,10 @@ tailscale_authkey: "{{ vault_tailscale_authkey }}"
 host_ip: 100.78.131.48
 lan_ip: 192.168.178.35
 
+# CertificateUUID from Plex's Preferences.xml. Changes only if the server
+# identity is reset; roles/media asserts it still matches the running server.
+plex_certificate_uuid: "27e660cb671a4e1187ed1b18655a18e2"
+
 plex_claim: "{{ vault_plex_claim | default('') }}"
 cloudflare_dns_api_token: "{{ vault_cloudflare_dns_api_token }}"
 crowdsec_bouncer_key: "{{ vault_crowdsec_bouncer_key }}"

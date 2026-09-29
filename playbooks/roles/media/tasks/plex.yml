@@ -5,3 +5,31 @@
     owner: 1000
     group: 1000
     mode: "0750"
+
+# plex_secure_url embeds the certificate UUID. A stale one fails certificate
+# verification in every client instead of erroring anywhere visible, so catch
+# the drift here. Absent on a host where Plex has not started yet — nothing to
+# check then, and the URL is unusable until Plex is claimed either way.
+- name: Read Plex Preferences.xml
+  ansible.builtin.slurp:
+    src: "{{ config_path }}/plex/Library/Application Support/Plex Media Server/Preferences.xml"
+  register: plex_preferences
+  failed_when: false
+  changed_when: false
+
+- name: Assert plex_certificate_uuid matches the running server
+  ansible.builtin.assert:
+    that:
+      - plex_live_certificate_uuid == plex_certificate_uuid
+    fail_msg: >-
+      plex_certificate_uuid is stale: Preferences.xml reports
+      '{{ plex_live_certificate_uuid }}'. Update it in host_vars and re-run,
+      otherwise every client hits a certificate mismatch on plex_secure_url.
+  vars:
+    # regex_search returns None when it does not match; join('') turns both the
+    # no-match and the one-capture cases into a plain string.
+    plex_live_certificate_uuid: >-
+      {{ plex_preferences.content | b64decode
+         | regex_search('CertificateUUID="([^"]+)"', '\1')
+         | default([], true) | join('') }}
+  when: plex_preferences.content is defined
