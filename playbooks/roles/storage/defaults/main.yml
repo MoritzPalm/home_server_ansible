@@ -1,0 +1,9 @@
+---
+# Extra swap, on the SSD. Added because the host runs its container set with
+# under 1 GB of RAM free and the installer's swap sits full — see the comment in
+# tasks/main.yml for why this is a safety net, not a performance fix.
+#
+# Remove or shrink once the RAM upgrade lands (the board takes 64 GB across four
+# slots; A1 and B1 are free).
+swapfile_path: /swapfile-ansible
+swapfile_size: 8G

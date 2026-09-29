@@ -165,3 +165,56 @@
     -print -exec chmod ug+rwx {} +
   register: media_library_chmod
   changed_when: media_library_chmod.stdout | length > 0
+
+# --- swap ---------------------------------------------------------------------
+# Additive: this sits alongside whatever swap the installer created, it does not
+# replace it. The host runs ~50 containers on 7.6 GB, so at rest there is under
+# 1 GB free and the installer's 4 GB of swap runs full.
+#
+# This does NOT make the host faster — it is already swapping, and more swap
+# means more paging, not more memory. What it buys is headroom for the two
+# workloads that allocate in bursts (bookbridge's whisper transcription and
+# immich's machine learning): without it they trigger the OOM killer, which
+# chooses its victim by badness score and may well take postgres instead.
+#
+# On the SSD, not the pool: swapping onto mergerfs/FUSE would be pathological.
+- name: Check whether the ansible-managed swapfile exists
+  stat:
+    path: "{{ swapfile_path }}"
+  register: storage_swapfile
+
+- name: Create the swapfile
+  when: not storage_swapfile.stat.exists
+  block:
+    - name: Allocate the swapfile
+      command: "fallocate -l {{ swapfile_size }} {{ swapfile_path }}"
+      args:
+        creates: "{{ swapfile_path }}"
+
+    # Before mkswap: a world-readable swapfile exposes whatever was paged out.
+    - name: Restrict swapfile permissions
+      file:
+        path: "{{ swapfile_path }}"
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Format the swapfile
+      command: "mkswap {{ swapfile_path }}"
+
+- name: Persist the swapfile in fstab
+  ansible.posix.mount:
+    path: none
+    src: "{{ swapfile_path }}"
+    fstype: swap
+    opts: sw
+    state: present
+
+#- name: Enable the swapfile
+#  command: "swapon {{ swapfile_path }}"
+#  register: storage_swapon
+#  changed_when: storage_swapon.rc == 0
+#  failed_when:
+#    - storage_swapon.rc != 0
+    # Already active is the steady state on every re-run, not an error.
+#    - "'already active' not in storage_swapon.stderr"
