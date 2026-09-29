@@ -61,6 +61,10 @@ vikunja_postgres_password: "CHANGEME"
 vikunja_jwt_secret: "CHANGEME"
 tandoor_postgres_password: "CHANGEME"
 tandoor_secret_key: "CHANGEME"
+# USDA FoodData Central key for tandoor's nutrition lookups. Optional feature,
+# but the kitchen role templates it unconditionally, so the key must exist here
+# even if empty. Free key: https://fdc.nal.usda.gov/api-key-signup.html
+tandoor_fdc_api_key: ""
 vault_paperless_postgres_password: "CHANGEME"
 # Django SECRET_KEY. Rotating invalidates sessions and password-reset links.
 vault_paperless_secret_key: "CHANGEME"
