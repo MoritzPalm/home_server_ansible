@@ -39,6 +39,9 @@ oidc_vikunja_secret: "{{ vault_oidc_vikunja_secret }}"
 oidc_tandoor_secret: "{{ vault_oidc_tandoor_secret }}"
 oidc_immich_secret: "{{ vault_oidc_immich_secret }}"
 oidc_paperless_secret: "{{ vault_oidc_paperless_secret }}"
+oidc_audiobookshelf_secret: "{{ vault_oidc_audiobookshelf_secret }}"
+oidc_kavita_secret: "{{ vault_oidc_kavita_secret }}"
+oidc_shelfarr_secret: "{{ vault_oidc_shelfarr_secret }}"
 
 paperless_postgres_password: "{{ vault_paperless_postgres_password }}"
 # Django SECRET_KEY. Rotating it invalidates sessions and password-reset links.

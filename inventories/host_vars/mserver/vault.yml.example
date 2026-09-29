@@ -54,6 +54,9 @@ vault_oidc_vikunja_secret: "CHANGEME"
 vault_oidc_tandoor_secret: "CHANGEME"
 vault_oidc_immich_secret: "CHANGEME"
 vault_oidc_paperless_secret: "CHANGEME"
+vault_oidc_audiobookshelf_secret: "CHANGEME"
+vault_oidc_kavita_secret: "CHANGEME"
+vault_oidc_shelfarr_secret: "CHANGEME"
 
 # --- application databases ----------------------------------------------------
 immich_db_password: "CHANGEME"
@@ -84,6 +87,32 @@ vault_restic_offsite_env: {}
 # S3 only: GLACIER_IR is the cheapest class restic can use. Empty for B2/sftp.
 vault_restic_offsite_storage_class: ""
 
+# --- books --------------------------------------------------------------------
+# Encrypts the credentials bookbridge stores. Kept out of its data volume on
+# purpose, so a stolen database is not also the key to itself.
+# Generate with: openssl rand -hex 32
+bookbridge_secret_key: "CHANGEME"
+
+# Local admin accounts for audiobookshelf and kavita. These are here, unlike the
+# vikunja/tandoor/immich admins, because ansible creates them over the API on
+# first run — the same reason vault_paperless_admin_password is.
+#
+# They stay usable after OIDC is enabled and are the way back in when authentik
+# is down: kavita admins can still reach the password form with
+# ?forceShowPassword=true.
+#
+# The audiobookshelf API key bookbridge uses is NOT here. It is generated over
+# the API and written to {{ config_path }}/bookbridge/.abs_api_key, because this
+# file is committed to a public repository.
+audiobookshelf_admin_username: "admin"
+audiobookshelf_admin_password: "CHANGEME"
+# Kavita caps the password at 32 characters (RegisterDto StringLength(32)) and
+# requires at least 6. `openssl rand -base64 24` gives exactly 32 and fits;
+# `-base64 32` gives 44 and is rejected at registration.
+kavita_admin_username: "admin"
+kavita_admin_email: "you@example.com"   # must parse as an email; kavita validates it
+kavita_admin_password: "CHANGEME"
+
 # --- media --------------------------------------------------------------------
 # From https://plex.tv/claim — expires after 4 MINUTES, so fetch it immediately
 # before the playbook run that consumes it. Leave empty once claimed.
@@ -104,7 +133,6 @@ torrentleech_password: "CHANGEME"
 soulseek_password: "CHANGEME"
 slskd_api_key: "CHANGEME"
 slskd_web_password: "CHANGEME"
-abr_password: "CHANGEME"
 hevy_api_key: "CHANGEME"
 spotify_client_secret: "CHANGEME"
 ms_spotify_client_secret: "CHANGEME"

@@ -1,0 +1,182 @@
+- name: Ensure audiobookshelf admin credentials are set
+  assert:
+    that:
+      - audiobookshelf_admin_username is defined
+      - audiobookshelf_admin_username | length > 0
+      - audiobookshelf_admin_password is defined
+      - audiobookshelf_admin_password | length >= 12
+    fail_msg: >-
+      audiobookshelf_admin_username and audiobookshelf_admin_password (12+ chars)
+      must be set in vault.yml. They create the root account on first run and are
+      the way back in if authentik is unavailable.
+
+- name: Wait for audiobookshelf to be up
+  uri:
+    url: "http://{{ ansible_host }}:13378/healthcheck"
+    method: GET
+    status_code: 200
+  register: audiobookshelf_ping
+  retries: 30
+  delay: 2
+  until: audiobookshelf_ping.status == 200
+
+# isInit is false until a root user exists, which makes this the idempotency
+# guard: /init returns 500 rather than an error you can distinguish once the
+# server has been set up.
+- name: Check whether audiobookshelf has been initialized
+  uri:
+    url: "http://{{ ansible_host }}:13378/status"
+    method: GET
+    return_content: true
+  register: audiobookshelf_status
+
+- name: Create the audiobookshelf root user
+  when: not audiobookshelf_status.json.isInit
+  uri:
+    url: "http://{{ ansible_host }}:13378/init"
+    method: POST
+    body_format: json
+    body:
+      newRoot:
+        username: "{{ audiobookshelf_admin_username }}"
+        password: "{{ audiobookshelf_admin_password }}"
+    status_code: [200, 201]
+  no_log: true
+
+# Carries the password, so no_log stays on and the assert below reports the
+# status without the body.
+- name: Log in to audiobookshelf
+  uri:
+    url: "http://{{ ansible_host }}:13378/login"
+    method: POST
+    body_format: json
+    body:
+      username: "{{ audiobookshelf_admin_username }}"
+      password: "{{ audiobookshelf_admin_password }}"
+    status_code: [200, 401]
+    return_content: true
+  register: audiobookshelf_login
+  no_log: true
+
+- name: Ensure the audiobookshelf login succeeded
+  assert:
+    that:
+      - audiobookshelf_login.status == 200
+      - audiobookshelf_login.json.user.accessToken is defined
+    fail_msg: >-
+      Logging in to audiobookshelf as '{{ audiobookshelf_admin_username }}'
+      returned {{ audiobookshelf_login.status }}. Since /init above is what
+      creates this account, a 401 here means the root user already existed with
+      a different password.
+
+- name: Record the audiobookshelf session token and root user id
+  set_fact:
+    audiobookshelf_token: "{{ audiobookshelf_login.json.user.accessToken }}"
+    audiobookshelf_user_id: "{{ audiobookshelf_login.json.user.id }}"
+  no_log: true
+
+- name: Get audiobookshelf libraries
+  uri:
+    url: "http://{{ ansible_host }}:13378/api/libraries"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ audiobookshelf_token }}"
+    return_content: true
+  register: audiobookshelf_libraries
+  no_log: true
+
+# Audio only: the ebooks belong to kavita, so there is exactly one progress store
+# per format and bookbridge is the only thing that joins them.
+- name: Create the audiobookshelf audiobooks library
+  when: >
+    (audiobookshelf_libraries.json.libraries
+     | selectattr('name', 'equalto', audiobookshelf_library_name)
+     | list
+     | length) == 0
+  uri:
+    url: "http://{{ ansible_host }}:13378/api/libraries"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ audiobookshelf_token }}"
+    body_format: json
+    body:
+      name: "{{ audiobookshelf_library_name }}"
+      folders:
+        - fullPath: "/audiobooks"
+      mediaType: "book"
+      provider: "audible"
+      icon: "audiobookshelf"
+    status_code: [200, 201]
+  register: audiobookshelf_library_create
+  no_log: true
+
+# --- API key for bookbridge ---------------------------------------------------
+# The key value is returned exactly once, at creation, so it is persisted to disk
+# rather than re-fetched. It deliberately does NOT live in the vault: that file
+# is committed to a public repository, and this key grants full access to the
+# audiobookshelf account.
+- name: Check for a stored audiobookshelf API key
+  stat:
+    path: "{{ audiobookshelf_api_key_file }}"
+  register: audiobookshelf_api_key_stat
+
+- name: Provision an audiobookshelf API key for bookbridge
+  when: not audiobookshelf_api_key_stat.stat.exists
+  block:
+    - name: Get existing audiobookshelf API keys
+      uri:
+        url: "http://{{ ansible_host }}:13378/api/api-keys"
+        method: GET
+        headers:
+          Authorization: "Bearer {{ audiobookshelf_token }}"
+        return_content: true
+      register: audiobookshelf_api_keys
+      no_log: true
+
+    # Without this, losing the file and re-running would leave a growing pile of
+    # orphaned keys that can never be used, because their values are gone.
+    - name: Delete the orphaned bookbridge API key
+      when: >
+        (audiobookshelf_api_keys.json.apiKeys
+         | selectattr('name', 'equalto', 'bookbridge')
+         | list
+         | length) > 0
+      uri:
+        url: >-
+          http://{{ ansible_host }}:13378/api/api-keys/{{
+            (audiobookshelf_api_keys.json.apiKeys
+             | selectattr('name', 'equalto', 'bookbridge')
+             | map(attribute='id')
+             | first)
+          }}
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ audiobookshelf_token }}"
+        status_code: [200, 204]
+      no_log: true
+
+    - name: Create the bookbridge API key
+      uri:
+        url: "http://{{ ansible_host }}:13378/api/api-keys"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ audiobookshelf_token }}"
+        body_format: json
+        # No expiresIn: an expiring key would silently stop bookbridge months later.
+        body:
+          name: "bookbridge"
+          userId: "{{ audiobookshelf_user_id }}"
+          isActive: true
+        status_code: [200, 201]
+        return_content: true
+      register: audiobookshelf_api_key_create
+      no_log: true
+
+    - name: Store the audiobookshelf API key
+      copy:
+        dest: "{{ audiobookshelf_api_key_file }}"
+        content: "{{ audiobookshelf_api_key_create.json.apiKey.apiKey }}"
+        owner: root
+        group: docker
+        mode: "0640"
+      no_log: true

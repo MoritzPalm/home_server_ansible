@@ -1,0 +1,56 @@
+- name: Ensure books stack secrets are set
+  assert:
+    that:
+      - bookbridge_secret_key is defined
+      - bookbridge_secret_key | length >= 32
+    fail_msg: >-
+      bookbridge_secret_key (32+ chars) must be set in vault.yml.
+      Generate with: openssl rand -hex 32
+
+# The audiobookshelf API key is provisioned by audiobookshelf.yml, which cannot
+# run until the container is up — so on the very first deploy there is nothing to
+# write here and bookbridge starts without it. bookbridge.yml fills it in and
+# restarts the container once. Reading it back on later runs is what keeps the
+# .env stable instead of rewriting and restarting on every play.
+- name: Check for a stored audiobookshelf API key
+  stat:
+    path: "{{ audiobookshelf_api_key_file }}"
+  register: books_stored_api_key
+
+- name: Read the stored audiobookshelf API key
+  when: books_stored_api_key.stat.exists
+  slurp:
+    src: "{{ audiobookshelf_api_key_file }}"
+  register: books_stored_api_key_raw
+  no_log: true
+
+- name: Record the audiobookshelf API key currently on disk
+  set_fact:
+    books_env_api_key: >-
+      {{
+        books_stored_api_key.stat.exists
+        | ternary(books_stored_api_key_raw.content | default('') | b64decode | trim, '')
+      }}
+  no_log: true
+
+- name: create env file for books stack
+  copy:
+    dest: "{{ compose_root }}/books/.env"
+    owner: root
+    group: docker
+    mode: "0640"
+    content: |
+      HOST_IP={{ host_ip }}
+      HOST_AUDIOBOOKSHELF={{ tunnel_hosts.audiobookshelf }}
+      HOST_KAVITA={{ tunnel_hosts.kavita }}
+      HOST_BOOKBRIDGE={{ tunnel_hosts.bookbridge }}
+      CONFIG_PATH={{ config_path }}
+      MEDIA_PATH={{ media_path }}
+      ABS_API_KEY={{ books_env_api_key }}
+      BOOKBRIDGE_SECRET_KEY={{ bookbridge_secret_key }}
+  no_log: true
+
+- name: run books compose file
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_root }}/books"
+    files: "books.yml"

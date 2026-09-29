@@ -1,26 +1,26 @@
-- name: Configure audiobookrequest
-  ansible.builtin.import_tasks: audiobookrequest.yml
-  tags:
-    - arr
-    - arr-audiobookrequest
-
 - name: Configure bazarr
   ansible.builtin.import_tasks: bazarr.yml
   tags:
     - arr
     - arr-bazarr
 
-- name: Configure Bookshelf
-  ansible.builtin.import_tasks: bookshelf.yml
-  tags:
-    - arr
-    - arr-bookshelf
-
 - name: deploy arr docker stack
   ansible.builtin.import_tasks: docker.yml
   tags:
     - arr
     - arr-docker
+
+- name: Configure Chaptarr
+  ansible.builtin.import_tasks: chaptarr.yml
+  tags:
+    - arr
+    - arr-chaptarr
+
+- name: Configure Shelfarr
+  ansible.builtin.import_tasks: shelfarr.yml
+  tags:
+    - arr
+    - arr-shelfarr
 
 - name: Configure gluetun
   ansible.builtin.import_tasks: gluetun.yml

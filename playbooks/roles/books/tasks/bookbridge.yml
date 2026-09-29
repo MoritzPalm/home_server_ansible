@@ -1,0 +1,66 @@
+# Read from disk rather than taken as a fact from audiobookshelf.yml, so this
+# file still works when run on its own with --tags books-bookbridge.
+- name: Read the audiobookshelf API key
+  slurp:
+    src: "{{ audiobookshelf_api_key_file }}"
+  register: bookbridge_api_key_raw
+  no_log: true
+
+# Closes the first-run gap: docker.yml wrote the .env before audiobookshelf had
+# an API key to give. Now that one exists, put it in place. On every later run
+# docker.yml has already written the same value, so this is a no-op and the
+# container is left alone.
+- name: Put the audiobookshelf API key into the books env file
+  lineinfile:
+    path: "{{ compose_root }}/books/.env"
+    regexp: "^ABS_API_KEY="
+    line: "ABS_API_KEY={{ bookbridge_api_key_raw.content | b64decode | trim }}"
+    owner: root
+    group: docker
+    mode: "0640"
+  register: bookbridge_env_update
+  no_log: true
+
+- name: Recreate bookbridge with the audiobookshelf API key
+  when: bookbridge_env_update.changed
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_root }}/books"
+    files: "books.yml"
+    services:
+      - bookbridge
+    state: present
+    recreate: always
+
+- name: Wait for bookbridge to be up
+  uri:
+    url: "http://{{ ansible_host }}:5757/"
+    method: GET
+    status_code: [200, 302]
+  register: bookbridge_ping
+  retries: 30
+  delay: 2
+  until: bookbridge_ping.status in [200, 302]
+
+# Split-port mode: 5757 serves the dashboard and settings, 5758 serves kosync
+# only, and only 5758 is routed publicly. If this ever collapses back to a single
+# port, kosync.{{ public_domain }} would expose the admin UI to the internet
+# behind nothing but chain-public.
+- name: Check that the bookbridge kosync listener is separate from its dashboard
+  uri:
+    url: "http://{{ ansible_host }}:5758/"
+    method: GET
+    status_code: [200, 302, 404]
+  register: bookbridge_kosync_ping
+  retries: 15
+  delay: 2
+  until: bookbridge_kosync_ping.status in [200, 302, 404]
+
+# Per-reader kosync credentials are per user, so they stay UI work — there is no
+# server-wide setting to template here.
+- name: Show bookbridge device enrolment reminder
+  debug:
+    msg: >-
+      BookBridge dashboard is on http://{{ ansible_host }}:5757 (tailnet only)
+      and connected to audiobookshelf. Set per-reader kosync credentials under
+      Account -> My Integrations, point the reader at
+      https://{{ tunnel_hosts.bookbridge }}, then turn off open registration.

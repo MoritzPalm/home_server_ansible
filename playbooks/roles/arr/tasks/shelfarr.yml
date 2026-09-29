@@ -1,0 +1,36 @@
+- name: Create storage directory for shelfarr
+  file:
+    path: "{{ config_path }}/shelfarr"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0750"
+
+- name: Wait for shelfarr to be up
+  uri:
+    url: "http://{{ ansible_host }}:5056/up"
+    method: GET
+    status_code: 200
+  register: shelfarr_ping
+  retries: 30
+  delay: 2
+  until: shelfarr_ping.status == 200
+
+# Shelfarr has no configuration API, so indexers, download client, library paths
+# and OIDC are set once in its web UI. The first account registered becomes admin.
+# What has to be set there, and why:
+#   Downloads      /data/downloads/torrents  (same path qbittorrent writes to, so
+#                                             imports hardlink instead of copying)
+#   Ebooks         /data/media/books
+#   Audiobooks     /data/media/audiobooks
+#   Prowlarr       http://gluetun:9696       (prowlarr is in gluetun's netns)
+#   qBittorrent    gluetun:8088
+#   Audiobookshelf http://audiobookshelf:80  (triggers a scan after import)
+#   Auto-approve   off for non-admins        (a request otherwise spends MAM ratio
+#                                             without anyone deciding)
+- name: Show shelfarr manual configuration reminder
+  debug:
+    msg: >-
+      Shelfarr is up at http://{{ ansible_host }}:5056 — its settings are UI-only.
+      See the comment above this task in roles/arr/tasks/shelfarr.yml for the
+      values that must be set.

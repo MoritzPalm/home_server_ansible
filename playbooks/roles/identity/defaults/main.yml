@@ -69,3 +69,57 @@ authentik_oidc_apps:
     groups:
       - family
       - authentik Admins
+  # Same situation as immich: the iOS app completes the OAuth flow through a
+  # custom scheme, so the mobile redirect has to be registered alongside the web
+  # one or phone login fails while the browser works.
+  - slug: audiobookshelf
+    name: Audiobookshelf
+    host: "{{ tunnel_hosts.audiobookshelf }}"
+    description: Audiobooks
+    secret_env: OIDC_AUDIOBOOKSHELF_SECRET
+    redirect_uris:
+      - "https://{{ tunnel_hosts.audiobookshelf }}/auth/openid/callback"
+      - "https://{{ tunnel_hosts.audiobookshelf }}/auth/openid/mobile-redirect"
+      - "audiobookshelf://oauth"
+    groups:
+      - family
+      - authentik Admins
+  # Kavita reads roles from the claim configured in its OIDC settings, which must
+  # be set to 'groups'. A user whose groups do not include kavita's Login role
+  # cannot sign in, so these group names have to line up on the kavita side too.
+  - slug: kavita
+    name: Kavita
+    host: "{{ tunnel_hosts.kavita }}"
+    description: Ebooks
+    secret_env: OIDC_KAVITA_SECRET
+    redirect_uris:
+      - "https://{{ tunnel_hosts.kavita }}/signin-oidc"
+    groups:
+      - family
+      - authentik Admins
+  - slug: shelfarr
+    name: Shelfarr
+    host: "{{ tunnel_hosts.shelfarr }}"
+    description: Book requests
+    secret_env: OIDC_SHELFARR_SECRET
+    # Shelfarr builds this at runtime from the request host, so it must match the
+    # public hostname exactly. OmniAuth path_prefix is /auth, not devise's
+    # /users/auth.
+    #
+    # The http:// variant is registered on purpose. Shelfarr's production.rb ships
+    # with assume_ssl and force_ssl commented out and no env var bound to either,
+    # and its omniauth initializer reads rack.url_scheme directly — bypassing
+    # X-Forwarded-Proto — so behind traefik it sends http:// and authentik
+    # rejects the mismatch.
+    #
+    # Safe here only because secure-headers sets HSTS on every public host with
+    # includeSubdomains and a two-year max-age: a browser that has seen any
+    # *.moritzpalm.com response upgrades the URL before it leaves the machine, so
+    # the authorization code is never actually sent in the clear. Drop this line
+    # if shelfarr ever gains a supported proxy setting.
+    redirect_uris:
+      - "https://{{ tunnel_hosts.shelfarr }}/auth/oidc/callback"
+      - "http://{{ tunnel_hosts.shelfarr }}/auth/oidc/callback"
+    groups:
+      - family
+      - authentik Admins

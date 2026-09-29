@@ -1,0 +1,160 @@
+- name: Create config directory for chaptarr
+  file:
+    path: "{{ config_path }}/chaptarr"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0750"
+
+- name: Wait for chaptarr config.xml to be written
+  ansible.builtin.wait_for:
+    path: "{{ config_path }}/chaptarr/config.xml"
+    state: present
+    timeout: 120
+
+- name: Read chaptarr config
+  slurp:
+    src: "{{ config_path }}/chaptarr/config.xml"
+  register: chaptarr_config
+
+- name: Extract chaptarr API key from config.xml
+  set_fact:
+    chaptarr_api_key: >-
+      {{
+        (chaptarr_config.content | b64decode)
+        | regex_search('<ApiKey>[^<]+</ApiKey>')
+        | regex_replace('^<ApiKey>([^<]+)</ApiKey>$', '\1')
+      }}
+
+- name: Ensure chaptarr API key was found
+  assert:
+    that:
+      - chaptarr_api_key is defined
+      - chaptarr_api_key | length > 0
+    fail_msg: "Could not extract API key from chaptarr config.xml"
+
+- name: Wait for chaptarr to be up
+  uri:
+    url: "http://{{ ansible_host }}:8789/ping"
+    method: GET
+    status_code: 200
+  register: chaptarr_ping
+  retries: 30
+  delay: 2
+  until: chaptarr_ping.status == 200
+
+- name: Get chaptarr root folders
+  uri:
+    url: "http://{{ ansible_host }}:8789/api/v1/rootfolder"
+    method: GET
+    headers:
+      X-Api-Key: "{{ chaptarr_api_key }}"
+    return_content: true
+  register: chaptarr_root_folders
+
+# folderType is chaptarr's media-type discriminator: 0=Mixed, 1=Audiobook, 2=Ebook.
+- name: Build chaptarr root folders
+  set_fact:
+    chaptarr_root_folders_desired:
+      - path: "/data/media/books"
+        name: "books"
+        folderType: 2
+      - path: "/data/media/audiobooks"
+        name: "audiobooks"
+        folderType: 1
+
+- name: Create chaptarr root folders if missing
+  when: >
+    (chaptarr_root_folders.json
+     | selectattr('path', 'equalto', item.path)
+     | list
+     | length) == 0
+  uri:
+    url: "http://{{ ansible_host }}:8789/api/v1/rootfolder"
+    method: POST
+    headers:
+      X-Api-Key: "{{ chaptarr_api_key }}"
+    body_format: json
+    body: "{{ item }}"
+    status_code: [200, 201]
+    return_content: true
+  loop: "{{ chaptarr_root_folders_desired }}"
+  loop_control:
+    label: "{{ item.path }}"
+  register: chaptarr_rootfolder_create
+
+- name: Get existing chaptarr download clients
+  uri:
+    url: "http://{{ ansible_host }}:8789/api/v1/downloadclient"
+    method: GET
+    headers:
+      X-Api-Key: "{{ chaptarr_api_key }}"
+    return_content: true
+  register: chaptarr_downloadclients
+
+- name: Build chaptarr qBittorrent download client body
+  set_fact:
+    chaptarr_qbittorrent_body:
+      name: "qBittorrent"
+      enable: true
+      protocol: "torrent"
+      priority: 1
+      removeCompletedDownloads: false
+      removeFailedDownloads: true
+      implementationName: "qBittorrent"
+      implementation: "QBittorrent"
+      configContract: "QBittorrentSettings"
+      fields:
+        - name: "host"
+          value: "gluetun"
+        - name: "port"
+          value: 8088
+        - name: "useSsl"
+          value: false
+        - name: "ebookCategory"
+          value: "books"
+        - name: "audiobookCategory"
+          value: "audiobooks"
+        - name: "ebookImportedCategory"
+          value: "books-seeding"
+        - name: "audiobookImportedCategory"
+          value: "audiobooks-seeding"
+
+- name: Create chaptarr qBittorrent download client if missing
+  when: >
+    (chaptarr_downloadclients.json
+     | selectattr('implementation', 'equalto', 'QBittorrent')
+     | list
+     | length) == 0
+  uri:
+    url: "http://{{ ansible_host }}:8789/api/v1/downloadclient"
+    method: POST
+    headers:
+      X-Api-Key: "{{ chaptarr_api_key }}"
+    body_format: json
+    body: "{{ chaptarr_qbittorrent_body }}"
+    status_code: [200, 201]
+    return_content: true
+  register: chaptarr_qbittorrent_create
+
+- name: Get chaptarr indexer config
+  uri:
+    url: "http://{{ ansible_host }}:8789/api/v1/config/indexer"
+    method: GET
+    headers:
+      X-Api-Key: "{{ chaptarr_api_key }}"
+    return_content: true
+  register: chaptarr_indexer_config
+
+- name: Set chaptarr RSS sync interval
+  when: chaptarr_indexer_config.json.rssSyncInterval != chaptarr_rss_sync_interval
+  uri:
+    url: "http://{{ ansible_host }}:8789/api/v1/config/indexer/{{ chaptarr_indexer_config.json.id }}"
+    method: PUT
+    headers:
+      X-Api-Key: "{{ chaptarr_api_key }}"
+    body_format: json
+    body: "{{ chaptarr_indexer_config.json | combine({'rssSyncInterval': chaptarr_rss_sync_interval}) }}"
+    status_code: [200, 202]
+    return_content: true
+  register: chaptarr_indexer_config_update

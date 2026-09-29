@@ -7,6 +7,7 @@
     content: |
       HOST_IP={{ host_ip }}
       HOST_OVERSEERR={{ tunnel_hosts.overseerr }}
+      HOST_SHELFARR={{ tunnel_hosts.shelfarr }}
       CONFIG_PATH={{ config_path }}
       MEDIA_PATH={{ media_path }}
       STORAGE_PATH={{ storage_path }}
@@ -14,8 +15,6 @@
       OPENVPN_PASSWORD={{ openvpn_password }}
       TORRENT_PATH={{ torrent_path }}
       MAM_SESSION_ID={{ mam_id }}
-      ABR_USERNAME={{ abr_username }}
-      ABR_PASSWORD={{ abr_password }}
       SOULSEEK_PATH={{ soulseek_path }}
       SLSKD_UMASK=0022
   no_log: true

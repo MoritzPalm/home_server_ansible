@@ -1,8 +1,0 @@
-- name: Create config directory for audiobookrequest
-  file:
-    path: "{{ config_path }}/audiobookrequest"
-    state: directory
-    owner: 1000
-    group: 1000
-    mode: "0750"
-

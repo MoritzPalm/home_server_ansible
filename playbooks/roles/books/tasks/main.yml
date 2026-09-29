@@ -1,0 +1,29 @@
+- name: Prepare book service config directories
+  ansible.builtin.import_tasks: config_dirs.yml
+  tags:
+    - books
+    - books-config
+
+- name: deploy books docker stack
+  ansible.builtin.import_tasks: docker.yml
+  tags:
+    - books
+    - books-docker
+
+- name: Configure audiobookshelf
+  ansible.builtin.import_tasks: audiobookshelf.yml
+  tags:
+    - books
+    - books-audiobookshelf
+
+- name: Configure kavita
+  ansible.builtin.import_tasks: kavita.yml
+  tags:
+    - books
+    - books-kavita
+
+- name: Configure bookbridge
+  ansible.builtin.import_tasks: bookbridge.yml
+  tags:
+    - books
+    - books-bookbridge

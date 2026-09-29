@@ -16,7 +16,7 @@
     - "{{ config_path }}/sonarr/config.xml"
     - "{{ config_path }}/prowlarr/config.xml"
     - "{{ config_path }}/whisparr/config.xml"
-    - "{{ config_path }}/bookshelf/config.xml"
+    - "{{ config_path }}/chaptarr/config.xml"
 
 - name: Read Radarr config
   slurp:
@@ -38,10 +38,10 @@
     src: "{{ config_path }}/whisparr/config.xml"
   register: whisparr_config
 
-- name: Read Bookshelf config
+- name: Read Chaptarr config
   slurp:
-    src: "{{ config_path }}/bookshelf/config.xml"
-  register: bookshelf_config
+    src: "{{ config_path }}/chaptarr/config.xml"
+  register: chaptarr_config
 
 
 - name: Extract Radarr API Key from config.xml
@@ -80,11 +80,11 @@
         | regex_replace('^<ApiKey>([^<]+)</ApiKey>$', '\1')
       }}
 
-- name: Extract Bookshelf API key from config.xml
+- name: Extract Chaptarr API key from config.xml
   set_fact:
-    bookshelf_api_key: >-
+    chaptarr_api_key: >-
       {{
-        (bookshelf_config.content | b64decode)
+        (chaptarr_config.content | b64decode)
         | regex_search('<ApiKey>[^<]+</ApiKey>')
         | regex_replace('^<ApiKey>([^<]+)</ApiKey>$', '\1')
       }}
@@ -100,8 +100,8 @@
       - prowlarr_api_key | length > 0
       - whisparr_api_key is defined
       - whisparr_api_key | length > 0
-      - bookshelf_api_key is defined
-      - bookshelf_api_key | length > 0
+      - chaptarr_api_key is defined
+      - chaptarr_api_key | length > 0
     fail_msg: "Could not extract API key from config.xml"
 
 - name: Wait for Prowlarr to be up
@@ -122,6 +122,34 @@
       X-Api-Key: "{{ prowlarr_api_key }}"
     return_content: true
   register: prowlarr_apps
+
+- name: Get Prowlarr application schema
+  uri:
+    url: "http://{{ ansible_host }}:9696/api/v1/applications/schema"
+    method: GET
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    return_content: true
+  register: prowlarr_app_schema
+
+- name: Select the book application implementation offered by this Prowlarr
+  set_fact:
+    prowlarr_book_app: >-
+      {{
+        (prowlarr_app_schema.json
+         | selectattr('implementation', 'in', ['Chaptarr', 'Readarr'])
+         | list
+         | first)
+        | default({}, true)
+      }}
+
+- name: Ensure Prowlarr offers a book application type
+  assert:
+    that:
+      - prowlarr_book_app.implementation is defined
+    fail_msg: >-
+      Prowlarr's application schema offers neither Chaptarr nor Readarr.
+      Check the Prowlarr version before continuing.
 
 # extract Sonarr / Radarr app IDs (or "" if not present)
 
@@ -154,10 +182,10 @@
          | first)
         | default('', true)
       }}
-    prowlarr_bookshelf_id: >-
+    prowlarr_chaptarr_id: >-
       {{
         (prowlarr_apps.json
-        | selectattr('implementation', 'equalto', 'Readarr')
+        | selectattr('implementation', 'in', ['Chaptarr', 'Readarr'])
         | map(attribute='id')
         | list
         | first)
@@ -216,21 +244,21 @@
         - name: "apiKey"
           value: "{{ whisparr_api_key }}"
 
-- name: Build Bookshelf application body
+- name: Build Chaptarr application body
   set_fact:
-    prowlarr_bookshelf_body:
-      name: "Readarr"
-      implementation: "Readarr"
-      configContract: "ReadarrSettings"
+    prowlarr_chaptarr_body:
+      name: "Chaptarr"
+      implementation: "{{ prowlarr_book_app.implementation }}"
+      configContract: "{{ prowlarr_book_app.configContract }}"
       enable: true
       syncLevel: "fullSync"
       fields:
         - name: "prowlarrUrl"
           value: "http://gluetun:9696"
         - name: "baseUrl"
-          value: "http://bookshelf:8787"
+          value: "http://chaptarr:8789"
         - name: "apiKey"
-          value: "{{ bookshelf_api_key }}"
+          value: "{{ chaptarr_api_key }}"
 
 # create if missing 
 
@@ -274,18 +302,18 @@
     return_content: true
   register: prowlarr_whisparr_create
 
-- name: Create Bookshelf app in Prowlarr if it does not exist
-  when: prowlarr_bookshelf_id == ''
+- name: Create Chaptarr app in Prowlarr if it does not exist
+  when: prowlarr_chaptarr_id == ''
   uri:
     url: "http://{{ ansible_host }}:9696/api/v1/applications"
     method: POST
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
     body_format: json
-    body: "{{ prowlarr_bookshelf_body }}"
+    body: "{{ prowlarr_chaptarr_body }}"
     status_code: [200, 201]
     return_content: true
-  register: prowlarr_bookshelf_create
+  register: prowlarr_chaptarr_create
 
 
 # update if existing 
@@ -305,10 +333,10 @@
   set_fact:
     prowlarr_whisparr_body_update: "{{ prowlarr_whisparr_body | combine({'id': prowlarr_whisparr_id}) }}"
 
-- name: Build Bookshelf body with ID for update
-  when: prowlarr_bookshelf_id != ''
+- name: Build Chaptarr body with ID for update
+  when: prowlarr_chaptarr_id != ''
   set_fact:
-    prowlarr_bookshelf_body_update: "{{ prowlarr_bookshelf_body | combine({'id': prowlarr_bookshelf_id}) }}"
+    prowlarr_chaptarr_body_update: "{{ prowlarr_chaptarr_body | combine({'id': prowlarr_chaptarr_id}) }}"
 
 - name: Update existing Sonarr app in Prowlarr
   when: prowlarr_sonarr_id != ''
@@ -349,18 +377,18 @@
     return_content: true
   register: prowlarr_whisparr_update
 
-- name: Update existing Bookshelf app
-  when: prowlarr_bookshelf_id != ''
+- name: Update existing Chaptarr app
+  when: prowlarr_chaptarr_id != ''
   uri:
-    url: "http://{{ ansible_host }}:9696/api/v1/applications/{{ prowlarr_bookshelf_id }}"
+    url: "http://{{ ansible_host }}:9696/api/v1/applications/{{ prowlarr_chaptarr_id }}"
     method: PUT
     headers:
       X-Api-Key: "{{ prowlarr_api_key }}"
     body_format: json
-    body: "{{ prowlarr_bookshelf_body_update }}"
+    body: "{{ prowlarr_chaptarr_body_update }}"
     status_code: [200, 201, 202]
     return_content: true
-  register: prowlarr_bookshelf_update
+  register: prowlarr_chaptarr_update
 
 
 - name: Get existing download clients (if any)
@@ -433,6 +461,71 @@
     return_content: true
   register: prowlarr_qbittorrent_create
 
+
+- name: Get Prowlarr app profiles
+  uri:
+    url: "http://{{ ansible_host }}:9696/api/v1/appprofile"
+    method: GET
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    return_content: true
+  register: prowlarr_appprofiles
+
+- name: Build interactive-only app profile body
+  set_fact:
+    prowlarr_interactive_profile_body:
+      name: "Interactive Only"
+      enableRss: false
+      enableAutomaticSearch: false
+      enableInteractiveSearch: true
+      minimumSeeders: 1
+
+- name: Create interactive-only app profile if missing
+  when: >
+    (prowlarr_appprofiles.json
+     | selectattr('name', 'equalto', 'Interactive Only')
+     | list
+     | length) == 0
+  uri:
+    url: "http://{{ ansible_host }}:9696/api/v1/appprofile"
+    method: POST
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    body_format: json
+    body: "{{ prowlarr_interactive_profile_body }}"
+    status_code: [200, 201]
+    return_content: true
+  register: prowlarr_interactive_profile_create
+
+- name: Re-read Prowlarr app profiles
+  uri:
+    url: "http://{{ ansible_host }}:9696/api/v1/appprofile"
+    method: GET
+    headers:
+      X-Api-Key: "{{ prowlarr_api_key }}"
+    return_content: true
+  register: prowlarr_appprofiles_after
+
+- name: Record the interactive-only app profile ID
+  set_fact:
+    prowlarr_interactive_profile_id: >-
+      {{
+        (prowlarr_appprofiles_after.json
+         | selectattr('name', 'equalto', 'Interactive Only')
+         | map(attribute='id')
+         | list
+         | first)
+        | default('', true)
+      }}
+
+- name: Ensure the interactive-only app profile exists
+  assert:
+    that:
+      - prowlarr_interactive_profile_id | string | length > 0
+    fail_msg: >-
+      Could not create or find the 'Interactive Only' Prowlarr app profile.
+      Refusing to continue: MyAnonamouse would fall back to unattended grabbing
+      of non-freeleech torrents.
 
 # adding indexers
 - name: Get list of indexers already present
@@ -546,11 +639,14 @@
       definitionName: "MyAnonamouse"
       name: "MyAnonamouse"
       enable: true
+      # redirect stays false so prowlarr fetches the .torrent itself. Prowlarr is
+      # in gluetun's network namespace and chaptarr is not; a redirect would make
+      # chaptarr fetch from the host IP, which the IP-locked MAM session rejects.
       redirect: false
       implementation: "MyAnonamouse"
       configContract: "MyAnonamouseSettings"
       priority: 10
-      appProfileId: 1
+      appProfileId: "{{ prowlarr_interactive_profile_id | int }}"
       fields:
         - name: "mamId"
           value: "{{ mam_id }}"

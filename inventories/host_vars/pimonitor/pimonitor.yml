@@ -37,8 +37,8 @@ monitors:
   - { name: "Whisparr",         port: 6969,  path: "/" }
   - { name: "Overseerr",        port: 5055,  path: "/" }
   - { name: "Profilarr",        port: 6868,  path: "/" }
-  - { name: "Bookshelf",        port: 8787,  path: "/" }
-  - { name: "AudioBookRequest", port: 8000,  path: "/" }
+  - { name: "Chaptarr",         port: 8789,  path: "/ping" }
+  - { name: "Shelfarr",         port: 5056,  path: "/up" }
   # cross-seed serves no / route (404 "Unknown endpoint"); /api/ping returns 200
   - { name: "cross-seed",       port: 2468,  path: "/api/ping" }
   - { name: "Prowlarr",         port: 9696,  path: "/" }
@@ -52,6 +52,11 @@ monitors:
   - { name: "Vikunja",          port: 3456,  path: "/" }
   - { name: "Tandoor",          port: 9815,  path: "/" }
   - { name: "Hevy",             port: 8123,  path: "/" }
+  # Books
+  - { name: "Audiobookshelf",   port: 13378, path: "/healthcheck" }
+  - { name: "Kavita",           port: 5000,  path: "/api/health" }
+  # 5757 is the dashboard; the kosync listener on 5758 is checked publicly
+  - { name: "BookBridge",       port: 5757,  path: "/" }
 
 pi_wireguard_interface: "wg0"
 

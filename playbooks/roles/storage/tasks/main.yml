@@ -118,6 +118,7 @@
     - "{{ torrent_path }}/tv"
     - "{{ torrent_path }}/music"
     - "{{ torrent_path }}/books"
+    - "{{ torrent_path }}/audiobooks"
     - "{{ torrent_path }}/xxx"
 
 - name: Create soulseek download directories

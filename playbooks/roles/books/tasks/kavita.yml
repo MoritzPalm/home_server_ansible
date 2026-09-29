@@ -1,0 +1,148 @@
+- name: Ensure kavita admin credentials are set
+  assert:
+    that:
+      - kavita_admin_username is defined
+      - kavita_admin_username | length > 0
+      - kavita_admin_password is defined
+      - kavita_admin_password | length >= 12
+      # Kavita's RegisterDto is StringLength(32): anything longer is rejected at
+      # registration, which then looks like a wrong password at login.
+      - kavita_admin_password | length <= 32
+      - kavita_admin_email is defined
+    fail_msg: >-
+      kavita_admin_username, kavita_admin_password (12+ chars) and
+      kavita_admin_email must be set in vault.yml. This account stays a local
+      login after OIDC is enabled and is the documented way back in, since an
+      admin can still reach the password form with ?forceShowPassword=true.
+
+- name: Wait for kavita to be up
+  uri:
+    url: "http://{{ ansible_host }}:5000/api/health"
+    method: GET
+    status_code: 200
+  register: kavita_ping
+  retries: 30
+  delay: 2
+  until: kavita_ping.status == 200
+
+# RegisterFirstUser refuses with 400 once any admin exists, so accepting 400 here
+# is the idempotency guard rather than a swallowed error.
+- name: Create the kavita admin user
+  uri:
+    url: "http://{{ ansible_host }}:5000/api/account/register"
+    method: POST
+    body_format: json
+    body:
+      username: "{{ kavita_admin_username }}"
+      email: "{{ kavita_admin_email }}"
+      password: "{{ kavita_admin_password }}"
+    status_code: [200, 400]
+  register: kavita_register
+  no_log: true
+
+# These tasks carry the password or the session token in their arguments, so
+# no_log has to stay on — which also hides the reason for any failure. Each one
+# therefore tolerates the plausible error codes and is followed by an assert that
+# reports the status only, never the body.
+- name: Log in to kavita
+  uri:
+    url: "http://{{ ansible_host }}:5000/api/account/login"
+    method: POST
+    body_format: json
+    body:
+      username: "{{ kavita_admin_username }}"
+      password: "{{ kavita_admin_password }}"
+    status_code: [200, 400, 401]
+    return_content: true
+  register: kavita_login
+  no_log: true
+
+- name: Ensure the kavita login succeeded
+  assert:
+    that:
+      - kavita_login.status == 200
+      - kavita_login.json.token is defined
+      - kavita_login.json.token | length > 0
+    fail_msg: >-
+      Logging in to kavita as '{{ kavita_admin_username }}' returned
+      {{ kavita_login.status }}. Since the register step above is what creates
+      this account, a 400 or 401 here means registration did not take — check its
+      response rather than the password.
+
+- name: Record the kavita session token
+  set_fact:
+    kavita_token: "{{ kavita_login.json.token }}"
+  no_log: true
+
+# type 2 is LibraryType.Book, which is what makes kavita read epub metadata
+# rather than parsing manga filenames.
+#
+# No "does it already exist" lookup first: AddLibrary returns 400 when the name
+# is taken, so this is idempotent on its own, and the list endpoint has moved
+# between kavita versions while create has not.
+- name: Create the kavita books library
+  uri:
+    url: "http://{{ ansible_host }}:5000/api/library/create"
+    method: POST
+    headers:
+      Authorization: "Bearer {{ kavita_token }}"
+    body_format: json
+    # Every field on UpdateLibraryDto is [Required]; omitting any is a 400.
+    body:
+      id: 0
+      name: "{{ kavita_library_name }}"
+      type: 2
+      folders:
+        - "/books"
+      folderWatching: true
+      includeInDashboard: true
+      includeInRecommended: true
+      includeInSearch: true
+      manageCollections: false
+      manageReadingLists: true
+      allowScrobbling: false
+    status_code: [200, 400, 401, 403]
+  register: kavita_library_create
+  no_log: true
+
+# A 400 from create means either "name already taken" or a rejected body, and
+# the two are indistinguishable from the status alone — so verify the library is
+# actually there rather than trusting the status. Without this the play reports
+# success while kavita watches zero folders.
+- name: Check whether the kavita library exists
+  uri:
+    url: "http://{{ ansible_host }}:5000/api/library/name-exists?name={{ kavita_library_name | urlencode }}"
+    method: GET
+    headers:
+      Authorization: "Bearer {{ kavita_token }}"
+    status_code: 200
+    return_content: true
+  register: kavita_library_exists
+  no_log: true
+
+- name: Ensure the kavita library exists
+  assert:
+    that:
+      - kavita_library_exists.json | bool
+    fail_msg: >-
+      The {{ kavita_library_name }} library does not exist after create returned
+      {{ kavita_library_create.status }}. A 400 here is a rejected body, not a
+      duplicate name — check that /books is mounted and readable inside the
+      container, and compare the body in this task against the UpdateLibraryDto
+      the running kavita version expects.
+
+# OIDC is deliberately left to the UI. Two settings there will lock you out if
+# they are wrong, and both are easier to verify with the login page in front of
+# you than to debug through the API:
+#   Roles claim  must be changed from the default microsoft schema URI to
+#                'groups', which is what authentik emits
+#   Login role   a user whose groups do not grant kavita's 'Login' role cannot
+#                sign in at all
+# The local admin created above is the fallback: ?forceShowPassword=true still
+# shows the password form for admins.
+- name: Show kavita OIDC reminder
+  debug:
+    msg: >-
+      Kavita is configured at http://{{ ansible_host }}:5000 with the
+      {{ kavita_library_name }} library. OIDC is still manual — set the roles
+      claim to 'groups' and make sure mapped groups grant the Login role.

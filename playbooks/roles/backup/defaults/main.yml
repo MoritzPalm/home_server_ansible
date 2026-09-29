@@ -93,6 +93,9 @@ backup_excludes:
   - "**/MediaCover"       # *arr artwork — lidarr's alone is 3.5 GB
   - "**/generated"        # stash previews and sprites
   - "**/[Cc]ache"
+  # Matches at any depth, which is why audiobookshelf's /metadata mount is backed
+  # by a host directory called absdata: it holds reading progress and ABS's own
+  # backups, and would silently never be snapshotted under its upstream name.
   - "**/metadata"
 
   # Logs ship to Loki. lidarr's logs.db is 357 MB and is a log, not config.

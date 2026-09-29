@@ -26,6 +26,9 @@
           bypass_local_auth: true
           bypass_auth_subnet_whitelist_enabled: true
           bypass_auth_subnet_whitelist: "172.16.0.0/12\n192.168.0.0/20"
+          max_ratio_enabled: false
+          max_seeding_time_enabled: false
+          max_inactive_seeding_time_enabled: false
 
     - name: Ensure qBittorrent config dir exists
       file:
@@ -125,3 +128,32 @@
       failed_when: qbt_set.rc != 0
       changed_when: (qbt_prefs_diff | default([])) | length > 0
       when: (qbt_prefs_diff | default([])) | length > 0
+
+    - name: Fetch existing qbittorrent categories
+      community.docker.docker_container_exec:
+        container: gluetun
+        argv:
+          - wget
+          - -q
+          - -O-
+          - http://127.0.0.1:8088/api/v2/torrents/categories
+      register: qbt_categories_raw
+      changed_when: false
+
+    - name: Create missing qbittorrent book categories
+      community.docker.docker_container_exec:
+        container: gluetun
+        argv:
+          - wget
+          - -q
+          - -O-
+          - --post-data
+          - "category={{ item.name }}&savePath={{ item.path }}"
+          - http://127.0.0.1:8088/api/v2/torrents/createCategory
+      loop: "{{ qbt_book_categories }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: item.name not in (qbt_categories_raw.stdout | from_json)
+      register: qbt_category_create
+      failed_when: qbt_category_create.rc != 0
+      changed_when: true

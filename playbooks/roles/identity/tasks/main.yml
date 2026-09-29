@@ -74,6 +74,9 @@
       OIDC_TANDOOR_SECRET={{ oidc_tandoor_secret }}
       OIDC_IMMICH_SECRET={{ oidc_immich_secret }}
       OIDC_PAPERLESS_SECRET={{ oidc_paperless_secret }}
+      OIDC_AUDIOBOOKSHELF_SECRET={{ oidc_audiobookshelf_secret }}
+      OIDC_KAVITA_SECRET={{ oidc_kavita_secret }}
+      OIDC_SHELFARR_SECRET={{ oidc_shelfarr_secret }}
   no_log: true
   tags: [identity]
 

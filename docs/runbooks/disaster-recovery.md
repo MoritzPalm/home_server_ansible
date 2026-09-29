@@ -132,7 +132,7 @@ blueprint from git. Applications come up **empty**.
 | What | Action |
 |---|---|
 | **Cloudflare tunnel** | `credentials.json` is in the vault, but the tunnel object may not exist. Recreate it if needed and update `vault_cloudflared_tunnel_id`. |
-| **Cloudflare DNS** | `cloudflared tunnel route dns <tunnel> <host>` for all eight hostnames — proxied CNAMEs, not A records |
+| **Cloudflare DNS** | `cloudflared tunnel route dns <tunnel> <host>` for every hostname in `cloudflared_ingress_hosts` — proxied CNAMEs, not A records. Nothing creates these automatically, so a hostname added to that list is refused at the tunnel until its CNAME exists. |
 | **Fritz!Box** | Re-add the forward: external TCP 32401 → `192.168.178.35:32400`. Confirm UPnP is still disabled. |
 | **Plex** | Re-claim; see §6 |
 | **Tailscale** | Remove the dead node, mint a fresh key |

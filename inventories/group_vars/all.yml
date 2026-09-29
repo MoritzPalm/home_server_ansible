@@ -22,6 +22,7 @@ media_library_dirs:
   - "{{ media_path }}/tv"
   - "{{ media_path }}/music"
   - "{{ media_path }}/books"
+  - "{{ media_path }}/audiobooks"
   - "{{ media_path }}/xxx"
 torrent_path: /mnt/storage/downloads/torrents
 downloads_path: /mnt/storage/downloads
@@ -75,6 +76,11 @@ tunnel_hosts:
   hevy: "fitness.{{ public_domain }}"
   authentik: "auth.{{ public_domain }}"
   immich: "photos.{{ public_domain }}"
+  audiobookshelf: "listen.{{ public_domain }}"
+  kavita: "read.{{ public_domain }}"
+  shelfarr: "books.{{ public_domain }}"
+  # Serves bookbridge's split kosync port only, never its dashboard.
+  bookbridge: "kosync.{{ public_domain }}"
 
 # Nothing is served over a directly forwarded port any more: every public
 # hostname goes through the outbound-only tunnel. Plex is the sole exception
@@ -107,6 +113,10 @@ cloudflared_ingress_hosts:
   - "{{ tunnel_hosts.hevy }}"
   - "{{ tunnel_hosts.immich }}"
   - "{{ tunnel_hosts.paperless }}"
+  - "{{ tunnel_hosts.audiobookshelf }}"
+  - "{{ tunnel_hosts.kavita }}"
+  - "{{ tunnel_hosts.shelfarr }}"
+  - "{{ tunnel_hosts.bookbridge }}"
 
 # Hosts protected by authentik forward-auth. Each gets an outpost callback
 # router generated in routers.yml. Only for apps with no login of their own;

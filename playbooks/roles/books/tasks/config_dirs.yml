@@ -1,0 +1,16 @@
+- name: Create config directories for the books stack
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0750"
+  loop:
+    - "{{ config_path }}/audiobookshelf"
+    - "{{ config_path }}/audiobookshelf/config"
+    # Deliberately not named 'metadata': the backup role excludes '**/metadata'
+    # from restic, and this holds per-user progress and audiobookshelf's own
+    # backups. Renaming it is what gets it into snapshots.
+    - "{{ config_path }}/audiobookshelf/absdata"
+    - "{{ config_path }}/kavita"
+    - "{{ config_path }}/bookbridge"

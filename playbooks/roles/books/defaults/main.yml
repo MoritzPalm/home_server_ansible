@@ -1,0 +1,9 @@
+---
+audiobookshelf_library_name: Audiobooks
+kavita_library_name: Books
+
+# Where the audiobookshelf API key for bookbridge is kept. Audiobookshelf returns
+# a key's value only at creation, so it is written here rather than re-fetched.
+# Under config_path, so restic backs it up alongside everything else it belongs
+# with — and out of the vault, which is world-readable in a public repo.
+audiobookshelf_api_key_file: "{{ config_path }}/bookbridge/.abs_api_key"
