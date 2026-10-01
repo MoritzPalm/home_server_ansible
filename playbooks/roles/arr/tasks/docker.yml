@@ -38,16 +38,16 @@
         directories:
           - "/music"
       soulseek:
-        username: {{ soulseek_username }}
-        password: {{ soulseek_password }}
+        username: {{ soulseek_username | to_json }}
+        password: {{ soulseek_password | to_json }}
       web:
         authentication:
           disabled: false
           username: slskd
-          password: {{ slskd_web_password | default(soulseek_password) }}
+          password: {{ slskd_web_password | default(soulseek_password) | to_json }}
           api_keys:
             soularr_api_key:
-              key: {{ slskd_api_key }}
+              key: {{ slskd_api_key | to_json }}
               #cidr: 129.168.178.0/24
   no_log: true
 
