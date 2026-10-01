@@ -132,6 +132,7 @@ openvpn_password: "CHANGEME"
 torrentleech_password: "CHANGEME"
 soulseek_password: "CHANGEME"
 slskd_api_key: "CHANGEME"
+mousehole_auth_password: "CHANGEME" # generate with: openssl rand -base64 24
 slskd_web_password: "CHANGEME"
 hevy_api_key: "CHANGEME"
 spotify_client_secret: "CHANGEME"
