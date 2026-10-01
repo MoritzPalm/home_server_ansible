@@ -1,0 +1,112 @@
+# Same check as the identity role's, repeated because --tags books skips it and
+# a missing secret would otherwise surface as a censored no_log failure below.
+- name: Ensure calibre-web-automated secrets are set
+  assert:
+    that:
+      - lookup('vars', 'oidc_cwa_secret', default='', errors='ignore') | default('', true) | length > 0
+      - cwa_admin_password is defined
+      - cwa_admin_password | length >= 12
+    fail_msg: >-
+      vault_oidc_cwa_secret (openssl rand -hex 32) and cwa_admin_password (12+
+      chars) must be set in vault.yml. The OIDC secret is shared with authentik's
+      blueprint; the password replaces CWA's default admin123.
+
+- name: Wait for calibre-web-automated to be up
+  uri:
+    url: "{{ cwa_url }}/login"
+    method: GET
+    status_code: 200
+  register: cwa_ping
+  # The first start copies in an empty library and sets up calibre.
+  retries: 60
+  delay: 5
+  until: cwa_ping.status == 200
+
+# Settings, the OIDC client and the admin password all live in app.db and
+# cwa.db, and CWA has no API for them, so they are written with sqlite3 from
+# inside the container — the same way CWA's own auto-library service sets the
+# library path. The script waits out first start by exiting 3 until CWA has
+# created the rows it updates.
+#
+# stdin carries the client secret and admin password, so no_log stays on and
+# the assert below reports the script's own output, which never contains them.
+- name: Apply calibre-web-automated settings
+  community.docker.docker_container_exec:
+    container: calibre-web-automated
+    user: abc
+    argv:
+      - /lsiopy/bin/python3
+      - -c
+      - "{{ lookup('file', 'cwa_provision.py') }}"
+    stdin: >-
+      {{ {
+           'app_settings': cwa_app_settings,
+           'oauth_provider': cwa_oauth_provider,
+           'cwa_settings': cwa_settings,
+           'admin': {'username': cwa_admin_username, 'password': cwa_admin_password}
+         } | to_json }}
+  register: cwa_provision
+  retries: 30
+  delay: 5
+  until: cwa_provision.rc is defined and cwa_provision.rc != 3
+  changed_when: >-
+    cwa_provision.rc == 0
+    and (cwa_provision.stdout | from_json).changed | length > 0
+  failed_when: false
+  no_log: true
+
+- name: Ensure the calibre-web-automated settings were applied
+  assert:
+    that:
+      - cwa_provision.rc == 0
+    fail_msg: >-
+      The provisioning script exited {{ cwa_provision.rc | default('?') }}.
+      stdout: {{ cwa_provision.stdout | default('') }}
+      stderr: {{ (cwa_provision.stderr | default('')).splitlines()[-5:] | join(' | ') }}
+    # Raw rather than parsed: assert templates both messages up front, and a
+    # from_json here would mask the failure with a parse error.
+    success_msg: "{{ cwa_provision.stdout | default('') }}"
+
+# app.db settings and the OAuth blueprint are loaded once at startup.
+- name: Restart calibre-web-automated to load the new settings
+  when: (cwa_provision.stdout | from_json).restart
+  community.docker.docker_compose_v2:
+    project_src: "{{ compose_root }}/books"
+    files: "books.yml"
+    services:
+      - calibre-web-automated
+    state: restarted
+
+- name: Fetch the calibre-web-automated login page
+  uri:
+    url: "{{ cwa_url }}/login"
+    method: GET
+    status_code: 200
+    return_content: true
+  register: cwa_login_page
+  retries: 30
+  delay: 5
+  until: cwa_login_page.status == 200
+
+# The generic button renders only with OAuth login selected, the provider active
+# and its blueprint registered at startup — so its presence confirms all three.
+- name: Ensure the authentik login button is offered
+  assert:
+    that:
+      - "'/link/generic' in cwa_login_page.content"
+    fail_msg: >-
+      CWA's login page has no OIDC button. Check 'docker logs
+      calibre-web-automated' for oauth errors, and that the generic row in
+      oauthProvider is active.
+
+# Existing books cannot be moved over automatically: the ingest folder consumes
+# whatever lands in it, and Shelfarr's library path is set in its UI only.
+- name: Show calibre-web-automated follow-up
+  debug:
+    msg: >-
+      Calibre-Web is at https://{{ tunnel_hosts.cwa }} (OIDC) and
+      {{ cwa_url }} (local admin '{{ cwa_admin_username }}'). New books arrive via
+      {{ cwa_ingest_dir }}: point Shelfarr's ebook path at
+      /data/downloads/cwa-ingest. OPDS for KOReader is
+      https://{{ tunnel_hosts.cwa }}/opds and needs a password set under the
+      user's profile.

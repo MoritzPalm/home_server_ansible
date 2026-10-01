@@ -14,3 +14,13 @@
     - "{{ config_path }}/audiobookshelf/absdata"
     - "{{ config_path }}/kavita"
     - "{{ config_path }}/bookbridge"
+    - "{{ cwa_config_dir }}"
+
+# Group-writable: Shelfarr writes here too, and CWA deletes each file once imported.
+- name: Create the calibre-web-automated ingest directory
+  file:
+    path: "{{ cwa_ingest_dir }}"
+    state: directory
+    owner: 1000
+    group: 1000
+    mode: "0775"

@@ -27,3 +27,9 @@
   tags:
     - books
     - books-bookbridge
+
+- name: Configure calibre-web-automated
+  ansible.builtin.import_tasks: cwa.yml
+  tags:
+    - books
+    - books-cwa

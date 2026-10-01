@@ -42,6 +42,7 @@ oidc_paperless_secret: "{{ vault_oidc_paperless_secret }}"
 oidc_audiobookshelf_secret: "{{ vault_oidc_audiobookshelf_secret }}"
 oidc_kavita_secret: "{{ vault_oidc_kavita_secret }}"
 oidc_shelfarr_secret: "{{ vault_oidc_shelfarr_secret }}"
+oidc_cwa_secret: "{{ vault_oidc_cwa_secret }}"
 
 paperless_postgres_password: "{{ vault_paperless_postgres_password }}"
 # Django SECRET_KEY. Rotating it invalidates sessions and password-reset links.

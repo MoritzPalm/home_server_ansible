@@ -21,7 +21,9 @@
 # What has to be set there, and why:
 #   Downloads      /data/downloads/torrents  (same path qbittorrent writes to, so
 #                                             imports hardlink instead of copying)
-#   Ebooks         /data/media/books
+#   Ebooks         /data/downloads/cwa-ingest (calibre-web-automated imports
+#                                             and then deletes each file; the
+#                                             torrent copy is untouched)
 #   Audiobooks     /data/media/audiobooks
 #   Prowlarr       http://gluetun:9696       (prowlarr is in gluetun's netns)
 #   qBittorrent    gluetun:8088

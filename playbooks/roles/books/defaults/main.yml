@@ -7,3 +7,82 @@ kavita_library_name: Books
 # Under config_path, so restic backs it up alongside everything else it belongs
 # with — and out of the vault, which is world-readable in a public repo.
 audiobookshelf_api_key_file: "{{ config_path }}/bookbridge/.abs_api_key"
+
+# --- calibre-web-automated ----------------------------------------------------
+cwa_config_dir: "{{ config_path }}/calibre-web-automated"
+# Under downloads_path so Shelfarr, which mounts storage_path, can hardlink into
+# it from the torrent folder.
+cwa_ingest_dir: "{{ downloads_path }}/cwa-ingest"
+cwa_url: "http://{{ ansible_host }}:8083"
+
+# Created by CWA on first start with the password admin123; cwa.yml replaces it.
+cwa_admin_username: admin
+# Overridden from the vault when set.
+cwa_hardcover_token: ""
+
+# Role bits from cps/constants.py: download 2, change password 16, edit shelves
+# 64, read in browser 256. No upload, metadata edit or delete for regular users.
+# Password change is what lets an OIDC user set a password for OPDS readers.
+cwa_default_role: 338
+
+# Auto-fetch takes the first hit from the first provider that returns any, so
+# order matters. ibdb and google never return series.
+cwa_metadata_providers: >-
+  {{ (cwa_hardcover_token | length > 0) | ternary(['hardcover'], [])
+     + ['ibdb', 'google', 'dnb'] }}
+
+# The 'settings' table in /config/app.db. CWA reads it once at startup, so
+# cwa.yml restarts the container when any value here changes.
+cwa_app_settings:
+  config_login_type: 2  # LOGIN_OAUTH
+  # Without a fixed host, Flask-Dance derives the callback from each request,
+  # and a login started on the tailnet port sends an unregistered redirect_uri.
+  config_oauth_redirect_host: "https://{{ tunnel_hosts.cwa }}"
+  config_enable_oauth_group_admin_management: 1
+  # Disabling the password form also rejects every password login server-side,
+  # which leaves no way in while authentik is down and breaks OPDS passwords.
+  config_disable_standard_login: 0
+  config_public_reg: 0
+  config_anonbrowse: 0
+  config_remote_login: 0
+  config_default_role: "{{ cwa_default_role }}"
+  # Nightly metadata.opf beside each book; calibre can rebuild metadata.db from them.
+  schedule_metadata_backup: 1
+
+# The generic row of the 'oauthProvider' table in /config/app.db.
+cwa_oauth_provider:
+  oauth_client_id: cwa
+  oauth_client_secret: "{{ oidc_cwa_secret }}"
+  oauth_base_url: "https://{{ tunnel_hosts.authentik }}/application/o/cwa-oidc/"
+  oauth_authorize_url: "https://{{ tunnel_hosts.authentik }}/application/o/authorize/"
+  oauth_token_url: "https://{{ tunnel_hosts.authentik }}/application/o/token/"
+  oauth_userinfo_url: "https://{{ tunnel_hosts.authentik }}/application/o/userinfo/"
+  # Left empty: when set, CWA refetches discovery at every start and overwrites
+  # the endpoints above, which makes startup depend on reaching authentik.
+  metadata_url: ""
+  scope: openid profile email
+  username_mapper: preferred_username
+  email_mapper: email
+  # Compared case-insensitively against the groups claim on every login; members
+  # gain admin, non-members lose it.
+  oauth_admin_group: authentik Admins
+  login_button: Sign in with authentik
+  active: 1
+
+# The 'cwa_settings' table in /config/cwa.db, read fresh by each ingest.
+cwa_settings:
+  cwa_update_notifications: 0  # Renovate owns updates
+  contribute_translations_notifications: 0
+  koreader_sync_enabled: 0  # bookbridge serves kosync
+  # Both keep a copy of every imported epub under /config, which lands on the
+  # SSD and in every restic snapshot. Shelfarr's original stays in the torrent
+  # folder for as long as it seeds.
+  auto_backup_imports: 0
+  auto_backup_epub_fixes: 0
+  auto_metadata_fetch_enabled: 1
+  auto_metadata_smart_application: 1
+  # The first search hit is applied unreviewed. Title and author embedded in the
+  # file are usually right, and a wrong hit there misfiles the book entirely.
+  auto_metadata_update_title: 0
+  auto_metadata_update_authors: 0
+  metadata_provider_hierarchy: "{{ cwa_metadata_providers }}"

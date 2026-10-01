@@ -44,10 +44,13 @@
       HOST_AUDIOBOOKSHELF={{ tunnel_hosts.audiobookshelf }}
       HOST_KAVITA={{ tunnel_hosts.kavita }}
       HOST_BOOKBRIDGE={{ tunnel_hosts.bookbridge }}
+      HOST_CWA={{ tunnel_hosts.cwa }}
       CONFIG_PATH={{ config_path }}
       MEDIA_PATH={{ media_path }}
+      DOWNLOADS_PATH={{ downloads_path }}
       ABS_API_KEY={{ books_env_api_key }}
       BOOKBRIDGE_SECRET_KEY={{ bookbridge_secret_key }}
+      CWA_HARDCOVER_TOKEN={{ cwa_hardcover_token }}
   no_log: true
 
 - name: run books compose file

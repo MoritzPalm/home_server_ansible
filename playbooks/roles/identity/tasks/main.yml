@@ -95,6 +95,7 @@
       OIDC_AUDIOBOOKSHELF_SECRET={{ oidc_audiobookshelf_secret }}
       OIDC_KAVITA_SECRET={{ oidc_kavita_secret }}
       OIDC_SHELFARR_SECRET={{ oidc_shelfarr_secret }}
+      OIDC_CWA_SECRET={{ oidc_cwa_secret }}
   no_log: true
   tags: [identity]
 

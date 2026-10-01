@@ -54,6 +54,7 @@ monitors:
   # Books
   - { name: "Audiobookshelf",   port: 13378, path: "/healthcheck" }
   - { name: "Kavita",           port: 5000,  path: "/api/health" }
+  - { name: "Calibre-Web",      port: 8083,  path: "/login" }
   # 5757 is the dashboard; the kosync listener on 5758 is checked publicly
   - { name: "BookBridge",       port: 5757,  path: "/" }
 

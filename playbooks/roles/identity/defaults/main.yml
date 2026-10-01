@@ -133,3 +133,17 @@ authentik_oidc_apps:
     groups:
       - family
       - authentik Admins
+  # CWA builds the callback as <config_oauth_redirect_host>/login/generic/authorized,
+  # with the redirect host pinned by roles/books/tasks/cwa.yml. It auto-creates a
+  # user on first login, so the group bindings below are the only access gate.
+  # Members of 'authentik Admins' are made CWA admins on every login.
+  - slug: cwa
+    name: Calibre-Web
+    host: "{{ tunnel_hosts.cwa }}"
+    description: Ebook library
+    secret_env: OIDC_CWA_SECRET
+    redirect_uris:
+      - "https://{{ tunnel_hosts.cwa }}/login/generic/authorized"
+    groups:
+      - family
+      - authentik Admins

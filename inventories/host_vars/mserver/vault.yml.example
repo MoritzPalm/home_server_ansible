@@ -57,6 +57,7 @@ vault_oidc_paperless_secret: "CHANGEME"
 vault_oidc_audiobookshelf_secret: "CHANGEME"
 vault_oidc_kavita_secret: "CHANGEME"
 vault_oidc_shelfarr_secret: "CHANGEME"
+vault_oidc_cwa_secret: "CHANGEME"
 
 # --- application databases ----------------------------------------------------
 immich_db_password: "CHANGEME"
@@ -112,6 +113,15 @@ audiobookshelf_admin_password: "CHANGEME"
 kavita_admin_username: "admin"
 kavita_admin_email: "you@example.com"   # must parse as an email; kavita validates it
 kavita_admin_password: "CHANGEME"
+
+# Calibre-Web Automated's local 'admin'. Ansible sets this password on every
+# run, replacing the upstream default of admin123. It stays usable after OIDC is
+# enabled, so it is the way in when authentik is down.
+# Generate with: openssl rand -base64 24
+cwa_admin_password: "CHANGEME"
+# Optional, free: https://docs.hardcover.app/api/getting-started/
+# Hardcover is the only metadata source CWA is configured with that returns series.
+cwa_hardcover_token: ""
 
 # --- media --------------------------------------------------------------------
 # From https://plex.tv/claim — expires after 4 MINUTES, so fetch it immediately
