@@ -77,9 +77,19 @@ authentik_oidc_apps:
     host: "{{ tunnel_hosts.audiobookshelf }}"
     description: Audiobooks
     secret_env: OIDC_AUDIOBOOKSHELF_SECRET
+    # Audiobookshelf only matches an OIDC login to an existing account when the
+    # email claim asserts verified, and authentik's stock mapping emits false.
+    # Without this it reports "User not found and auto-register is disabled"
+    # however well the addresses line up.
+    email_verified: true
     redirect_uris:
-      - "https://{{ tunnel_hosts.audiobookshelf }}/auth/openid/callback"
-      - "https://{{ tunnel_hosts.audiobookshelf }}/auth/openid/mobile-redirect"
+      # The /audiobookshelf prefix is the server's router base path, which it
+      # reports as routerBasePath in the client config it serves. Audiobookshelf
+      # builds its callback as <origin><base path>/auth/openid/callback, so the
+      # prefix belongs here too — without it authentik rejects the authorization
+      # request outright, since matching_mode is strict.
+      - "https://{{ tunnel_hosts.audiobookshelf }}/audiobookshelf/auth/openid/callback"
+      - "https://{{ tunnel_hosts.audiobookshelf }}/audiobookshelf/auth/openid/mobile-redirect"
       - "audiobookshelf://oauth"
     groups:
       - family

@@ -14,6 +14,32 @@ metadata:
   labels:
     blueprints.goauthentik.io/instantiate: "true"
 entries:
+{% if authentik_oidc_apps | selectattr('email_verified', 'defined') | selectattr('email_verified') | list | length > 0 %}
+
+  # authentik's own email mapping has returned "email_verified": false since
+  # 2025.10 — it has no record of whether an address was ever confirmed, so
+  # claiming otherwise would be a lie it refuses to tell by default. Apps that
+  # reject an explicitly-unverified email, or refuse to match one to an existing
+  # account, get this mapping instead of the stock one — audiobookshelf is the
+  # one that needs it today.
+  #
+  # Asserting the claim is honest for this authentik: every account in it is
+  # created here, by hand, from a blueprint. It is attached per provider, so no
+  # app gets the assertion unless its entry asks for it.
+  - model: authentik_providers_oauth2.scopemapping
+    state: present
+    id: scope-email-verified
+    identifiers:
+      name: "homeserver email (asserted verified)"
+    attrs:
+      scope_name: email
+      description: "Email address, asserted as verified"
+      expression: |
+        return {
+            "email": request.user.email,
+            "email_verified": True,
+        }
+{% endif %}
 
 {% for app in authentik_oidc_apps %}
   - model: authentik_providers_oauth2.oauth2provider
@@ -51,7 +77,11 @@ entries:
       # the user. Names verified against this authentik version's database.
       property_mappings:
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-openid]]
+{% if app.email_verified | default(false) %}
+        - !KeyOf scope-email-verified
+{% else %}
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-email]]
+{% endif %}
         - !Find [authentik_providers_oauth2.scopemapping, [managed, goauthentik.io/providers/oauth2/scope-profile]]
       signing_key: !Find [authentik_crypto.certificatekeypair, [name, authentik Self-signed Certificate]]
       sub_mode: user_email
