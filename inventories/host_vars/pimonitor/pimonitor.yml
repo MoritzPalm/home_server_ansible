@@ -37,7 +37,6 @@ monitors:
   - { name: "Whisparr",         port: 6969,  path: "/" }
   - { name: "Overseerr",        port: 5055,  path: "/" }
   - { name: "Profilarr",        port: 6868,  path: "/" }
-  - { name: "Chaptarr",         port: 8789,  path: "/ping" }
   - { name: "Shelfarr",         port: 5056,  path: "/up" }
   # cross-seed serves no / route (404 "Unknown endpoint"); /api/ping returns 200
   - { name: "cross-seed",       port: 2468,  path: "/api/ping" }

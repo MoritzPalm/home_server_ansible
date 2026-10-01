@@ -10,12 +10,6 @@
     - arr
     - arr-docker
 
-- name: Configure Chaptarr
-  ansible.builtin.import_tasks: chaptarr.yml
-  tags:
-    - arr
-    - arr-chaptarr
-
 - name: Configure Shelfarr
   ansible.builtin.import_tasks: shelfarr.yml
   tags:

@@ -1,8 +1,7 @@
 ---
-chaptarr_rss_sync_interval: 30
-
+# qBittorrent categories for the book stack. Shelfarr grabs and imports on its
+# own, so these exist to keep its downloads in their own save paths under
+# torrent_path, where an import can hardlink into media_path instead of copying.
 qbt_book_categories:
   - { name: "books", path: "/data/downloads/torrents/books" }
   - { name: "audiobooks", path: "/data/downloads/torrents/audiobooks" }
-  - { name: "books-seeding", path: "/data/downloads/torrents/books" }
-  - { name: "audiobooks-seeding", path: "/data/downloads/torrents/audiobooks" }
