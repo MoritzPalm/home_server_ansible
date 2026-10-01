@@ -10,14 +10,6 @@
       - authentik_bootstrap_password | length > 0
       - authentik_bootstrap_token is defined
       - authentik_bootstrap_token | length > 0
-      - oidc_vikunja_secret is defined
-      - oidc_vikunja_secret | length > 0
-      - oidc_tandoor_secret is defined
-      - oidc_tandoor_secret | length > 0
-      - oidc_immich_secret is defined
-      - oidc_immich_secret | length > 0
-      - oidc_paperless_secret is defined
-      - oidc_paperless_secret | length > 0
     fail_msg: >-
       Missing authentik secrets in inventories/host_vars/mserver/vault.yml.
       Generate each with 'openssl rand -base64 60 | tr -d "\n"':
@@ -26,6 +18,32 @@
       vault_authentik_postgres_password,
       vault_authentik_bootstrap_password and vault_authentik_bootstrap_token
       (consumed only on first start to create the initial admin).
+  tags: [identity]
+
+# Derived from the app list rather than named one by one, because the hand-written
+# version drifted: it still checked the first four apps long after three more had
+# been added, and a missing secret then surfaced as a censored failure on the
+# no_log .env task below instead of as a message naming the variable.
+#
+# errors='ignore' with the default is what catches the common case. Each secret is
+# defined in mserver.yml as a reference to its vault_ key, so when the vault half
+# is the missing one the variable itself still exists and only resolving it
+# raises — which a bare 'is defined' check reads as present.
+- name: Assert every OIDC app in the blueprint has a client secret
+  ansible.builtin.assert:
+    that:
+      - lookup('vars', item.secret_env | lower, default='', errors='ignore') | default('', true) | length > 0
+    fail_msg: >-
+      {{ item.secret_env | lower }} is missing or empty, so the identity stack's
+      .env cannot be written and authentik's blueprint would reject
+      {{ item.name }} with "client_secret: This field may not be null". Add
+      vault_{{ item.secret_env | lower }} to
+      inventories/host_vars/mserver/vault.yml with
+      'ansible-vault edit' — generate it with 'openssl rand -hex 32' — and put
+      the same value in {{ item.name }}'s own OIDC config.
+  loop: "{{ authentik_oidc_apps }}"
+  loop_control:
+    label: "{{ item.secret_env | lower }}"
   tags: [identity]
 
 - name: Create authentik directories
