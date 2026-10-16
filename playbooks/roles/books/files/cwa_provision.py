@@ -93,6 +93,16 @@ def main():
         if not os.path.exists(path):
             not_ready(f"{path} does not exist")
 
+    # cwa.db first: it needs no restart, so committing app.db last means a run
+    # that fails partway never leaves app.db changed behind a non-zero exit.
+    cwa = sqlite3.connect(CWA_DB, timeout=30)
+    cur = cwa.cursor()
+    if not table_exists(cur, "cwa_settings"):
+        not_ready("cwa.db has no cwa_settings table")
+    apply(cur, "cwa_settings", "1 = 1", (), cfg["cwa_settings"], "cwa_settings", changed)
+    cwa.commit()
+    cwa.close()
+
     app = sqlite3.connect(APP_DB, timeout=30)
     cur = app.cursor()
     for table in ("settings", "oauthProvider", "user"):
@@ -139,14 +149,6 @@ def main():
 
     app.commit()
     app.close()
-
-    cwa = sqlite3.connect(CWA_DB, timeout=30)
-    cur = cwa.cursor()
-    if not table_exists(cur, "cwa_settings"):
-        not_ready("cwa.db has no cwa_settings table")
-    apply(cur, "cwa_settings", "1 = 1", (), cfg["cwa_settings"], "cwa_settings", changed)
-    cwa.commit()
-    cwa.close()
 
     print(json.dumps({"changed": changed, "restart": restart}))
 

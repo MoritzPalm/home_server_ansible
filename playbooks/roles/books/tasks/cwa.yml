@@ -64,12 +64,25 @@
       stdout: {{ cwa_provision.stdout | default('') }}
       stderr: {{ (cwa_provision.stderr | default('')).splitlines()[-5:] | join(' | ') }}
     # Raw rather than parsed: assert templates both messages up front, and a
-    # from_json here would mask the failure with a parse error.
-    success_msg: "{{ cwa_provision.stdout | default('') }}"
+    # from_json here would mask the failure with a parse error. The prefix keeps
+    # ansible from turning the JSON into a dict, which assert rejects.
+    success_msg: "Applied: {{ cwa_provision.stdout | default('') }}"
 
-# app.db settings and the OAuth blueprint are loaded once at startup.
+- name: Check whether the running calibre-web-automated has OIDC loaded
+  uri:
+    url: "{{ cwa_url }}/login"
+    method: GET
+    status_code: 200
+    return_content: true
+  register: cwa_login_before
+
+# app.db settings and the OAuth blueprint are loaded once at startup. The page
+# check catches settings written by an earlier run that stopped before this
+# restart, which the script now reports as unchanged.
 - name: Restart calibre-web-automated to load the new settings
-  when: (cwa_provision.stdout | from_json).restart
+  when: >-
+    (cwa_provision.stdout | from_json).restart
+    or '/link/generic' not in cwa_login_before.content
   community.docker.docker_compose_v2:
     project_src: "{{ compose_root }}/books"
     files: "books.yml"
