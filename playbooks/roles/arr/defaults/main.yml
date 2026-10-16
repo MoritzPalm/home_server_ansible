@@ -5,3 +5,7 @@
 qbt_book_categories:
   - { name: "books", path: "/data/downloads/torrents/books" }
   - { name: "audiobooks", path: "/data/downloads/torrents/audiobooks" }
+
+# Uptime Kuma push monitor URL for gluetun-pf-check (query string optional).
+# Empty disables the push; the check still restarts gluetun on its own.
+gluetun_pf_push_url: ""

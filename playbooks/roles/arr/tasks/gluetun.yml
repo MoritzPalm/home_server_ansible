@@ -5,3 +5,52 @@
     owner: 1000
     group: 1000
     mode: "0750"
+
+# Trackers test connectability on the VPN egress IP. The forwarded port can stop
+# answering there while gluetun stays healthy (dead mapping, or a server that
+# forwards on a different IP), so check it from outside and recover.
+- name: Install gluetun port-forward check
+  ansible.builtin.template:
+    src: gluetun-pf-check.sh.j2
+    dest: /usr/local/bin/gluetun-pf-check
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Install gluetun port-forward check unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/gluetun-pf-check.service
+    mode: "0644"
+    content: |
+      # Managed by Ansible (roles/arr) — edits are overwritten.
+      [Unit]
+      Description=Check gluetun's forwarded port is reachable on the VPN egress IP
+      After=docker.service
+      Requires=docker.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/gluetun-pf-check
+
+- name: Install gluetun port-forward check timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/gluetun-pf-check.timer
+    mode: "0644"
+    content: |
+      # Managed by Ansible (roles/arr) — edits are overwritten.
+      [Unit]
+      Description=Periodically check gluetun's forwarded port
+
+      [Timer]
+      OnBootSec=10min
+      OnUnitActiveSec=15min
+
+      [Install]
+      WantedBy=timers.target
+
+- name: Enable gluetun port-forward check timer
+  ansible.builtin.systemd:
+    name: gluetun-pf-check.timer
+    enabled: true
+    state: started
+    daemon_reload: true

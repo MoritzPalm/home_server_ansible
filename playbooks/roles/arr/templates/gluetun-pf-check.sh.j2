@@ -1,0 +1,62 @@
+#!/bin/bash
+# Managed by Ansible (roles/arr) — edits on the host are overwritten.
+#
+# Checks that gluetun's forwarded port is reachable on the VPN egress IP, the
+# address trackers (MAM) test for connectability. ProtonVPN can stop forwarding
+# without gluetun noticing, and some servers forward on a different IP than
+# they egress from; both look healthy from inside the container.
+#
+#   reachable      reset the failure count, push "up" to Uptime Kuma
+#   not reachable  after MAX_FAILURES in a row, restart gluetun so it reconnects
+#                  to another pinned server, at most once per COOLDOWN seconds
+#                  (MAM limits how often the seedbox IP may change)
+#   no answer      leave the count alone; an ifconfig.co outage is not a VPN fault
+#
+# Uptime Kuma alerts when the pushes stop, which covers what a restart can't fix.
+
+set -uo pipefail
+
+MAX_FAILURES=2
+COOLDOWN=7200
+PUSH_URL={{ gluetun_pf_push_url | quote }}
+
+state_dir=/var/lib/gluetun-pf-check
+mkdir -p "$state_dir"
+
+# gluetun restarts its own tunnel while unhealthy; nothing to judge until it settles.
+docker inspect gluetun >/dev/null 2>&1 || exit 0
+[ "$(docker inspect gluetun --format '{{ '{{' }} .State.Health.Status {{ '}}' }}')" = healthy ] || exit 0
+
+port=$(docker exec gluetun cat /tmp/gluetun/forwarded_port 2>/dev/null | tr -dc 0-9)
+if [ -z "$port" ] || [ "$port" = 0 ]; then
+  answer='"reachable":false'
+else
+  answer=$(docker exec gluetun wget -qO- --timeout=20 "https://ifconfig.co/port/${port}" 2>/dev/null | tr -d ' \n')
+fi
+
+case "$answer" in
+  *'"reachable":true'*)
+    echo 0 > "$state_dir/failures"
+    if [ -n "$PUSH_URL" ]; then
+      curl -fsS -m 10 -o /dev/null "${PUSH_URL%%\?*}?status=up&msg=port%20${port}%20reachable" \
+        || echo "push to Uptime Kuma failed"
+    fi
+    ;;
+  *'"reachable":false'*)
+    failures=$(( $(cat "$state_dir/failures" 2>/dev/null || echo 0) + 1 ))
+    echo "$failures" > "$state_dir/failures"
+    echo "forwarded port ${port:-none} not reachable on the egress IP (${failures} in a row)"
+
+    now=$(date +%s)
+    last_restart=$(cat "$state_dir/last_restart" 2>/dev/null || echo 0)
+    if [ "$failures" -ge "$MAX_FAILURES" ] && [ $(( now - last_restart )) -ge "$COOLDOWN" ]; then
+      echo "restarting gluetun"
+      echo "$now" > "$state_dir/last_restart"
+      echo 0 > "$state_dir/failures"
+      docker restart gluetun >/dev/null
+    fi
+    ;;
+  *)
+    echo "no usable answer from ifconfig.co; skipping"
+    ;;
+esac
