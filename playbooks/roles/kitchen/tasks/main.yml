@@ -83,19 +83,21 @@
     command: /opt/recipes/venv/bin/python manage.py shell
     stdin: "{{ lookup('template', 'tandoor_bootstrap.py.j2') }}"
   register: tandoor_bootstrap
+  # No regex backreference here: Ansible escapes backslashes differently in
+  # conditionals and in {{ }} templates, so '\\1' only works in one of them.
   changed_when: >-
-    (tandoor_bootstrap.stdout
-     | regex_search('TANDOOR_BOOTSTRAP_RESULT (.*)', '\\1')
-     | first | from_json).changed
+    (tandoor_bootstrap.stdout_lines
+     | select('match', 'TANDOOR_BOOTSTRAP_RESULT ') | last
+     | replace('TANDOOR_BOOTSTRAP_RESULT ', '') | from_json).changed
   tags:
     - kitchen
 
 - name: Show what the tandoor seed changed
   ansible.builtin.debug:
     msg: >-
-      {{ (tandoor_bootstrap.stdout
-          | regex_search('TANDOOR_BOOTSTRAP_RESULT (.*)', '\\1')
-          | first | from_json) }}
+      {{ tandoor_bootstrap.stdout_lines
+         | select('match', 'TANDOOR_BOOTSTRAP_RESULT ') | last
+         | replace('TANDOOR_BOOTSTRAP_RESULT ', '') | from_json }}
   when: tandoor_bootstrap is changed
   tags:
     - kitchen
