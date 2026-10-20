@@ -631,3 +631,52 @@
 
 
 
+
+# Prowlarr keeps sending a cached MAM cookie after it starts getting 403s (e.g.
+# after a VPN exit IP change) and backs the indexer off for up to 24h. Testing
+# the indexer clears the cache and lifts the backoff.
+- name: Install Prowlarr MAM recovery script
+  ansible.builtin.template:
+    src: prowlarr-mam-recover.sh.j2
+    dest: /usr/local/bin/prowlarr-mam-recover
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Install Prowlarr MAM recovery unit
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/prowlarr-mam-recover.service
+    mode: "0644"
+    content: |
+      # Managed by Ansible (roles/arr) — edits are overwritten.
+      [Unit]
+      Description=Re-test Prowlarr's MyAnonamouse indexer while it is disabled
+      After=docker.service
+      Requires=docker.service
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/prowlarr-mam-recover
+
+- name: Install Prowlarr MAM recovery timer
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/prowlarr-mam-recover.timer
+    mode: "0644"
+    content: |
+      # Managed by Ansible (roles/arr) — edits are overwritten.
+      [Unit]
+      Description=Periodically check whether Prowlarr has disabled MyAnonamouse
+
+      [Timer]
+      OnBootSec=10min
+      OnUnitActiveSec=5min
+
+      [Install]
+      WantedBy=timers.target
+
+- name: Enable Prowlarr MAM recovery timer
+  ansible.builtin.systemd:
+    name: prowlarr-mam-recover.timer
+    enabled: true
+    state: started
+    daemon_reload: true

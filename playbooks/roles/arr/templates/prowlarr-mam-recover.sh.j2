@@ -1,0 +1,57 @@
+#!/bin/bash
+# Managed by Ansible (roles/arr) — edits on the host are overwritten.
+#
+# Re-tests Prowlarr's MyAnonamouse indexer while Prowlarr has it disabled.
+# Prowlarr sends a cached, rotated mam_id instead of the configured one and does
+# not drop that cache on a 403, so after the VPN exit IP changes every request
+# fails and the indexer backs off for up to 24h. An indexer test clears the
+# cookie cache, and a passing test lifts the backoff.
+#
+#   not disabled  nothing to do
+#   test passes   MAM is back in searches immediately
+#   test fails    wait COOLDOWN seconds before the next test, so a session MAM
+#                 has really revoked is not retried every run
+
+set -uo pipefail
+
+COOLDOWN=3600
+CONFIG={{ (config_path ~ '/prowlarr/config.xml') | quote }}
+
+state_dir=/var/lib/prowlarr-mam-recover
+mkdir -p "$state_dir"
+
+[ "$(docker inspect prowlarr --format '{{ '{{' }} .State.Health.Status {{ '}}' }}' 2>/dev/null)" = healthy ] || exit 0
+
+api_key=$(sed -n 's:.*<ApiKey>\([^<]*\)</ApiKey>.*:\1:p' "$CONFIG")
+[ -n "$api_key" ] || { echo "no API key in $CONFIG"; exit 1; }
+
+api() {
+  local path=$1
+  shift
+  docker exec -i prowlarr curl -sS --fail-with-body -m 120 \
+    -H "X-Api-Key: $api_key" "$@" "http://127.0.0.1:9696/api/v1/$path"
+}
+
+id=$(api indexer | python3 -c '
+import json, sys
+print(next((i["id"] for i in json.load(sys.stdin) if i["implementation"] == "MyAnonamouse"), ""))
+') || { echo "could not list indexers"; exit 1; }
+[ -n "$id" ] || exit 0
+
+disabled=$(api indexerstatus | python3 -c '
+import json, sys
+print(any(s["indexerId"] == int(sys.argv[1]) for s in json.load(sys.stdin)))
+' "$id") || { echo "could not read indexer status"; exit 1; }
+[ "$disabled" = True ] || exit 0
+
+now=$(date +%s)
+last_failed=$(cat "$state_dir/last_failed" 2>/dev/null || echo 0)
+[ $(( now - last_failed )) -ge "$COOLDOWN" ] || exit 0
+
+if out=$(api "indexer/$id" | api indexer/test -X POST -H 'Content-Type: application/json' --data-binary @-); then
+  rm -f "$state_dir/last_failed"
+  echo "MyAnonamouse was disabled; test passed, cookie cache cleared and backoff lifted"
+else
+  echo "$now" > "$state_dir/last_failed"
+  echo "MyAnonamouse was disabled; test failed: $out"
+fi
