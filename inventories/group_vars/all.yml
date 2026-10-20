@@ -74,7 +74,6 @@ tunnel_hosts:
   overseerr: "requests.{{ public_domain }}"
   vikunja: "tasks.{{ public_domain }}"
   tandoor: "recipes.{{ public_domain }}"
-  paperless: "docs.{{ public_domain }}"
   hevy: "fitness.{{ public_domain }}"
   authentik: "auth.{{ public_domain }}"
   immich: "photos.{{ public_domain }}"
@@ -84,6 +83,12 @@ tunnel_hosts:
   cwa: "library.{{ public_domain }}"
   # Serves bookbridge's split kosync port only, never its dashboard.
   bookbridge: "kosync.{{ public_domain }}"
+
+# Hostnames served on the websecure entrypoint only. *.{{ internal_domain }}
+# resolves to the tailnet address and :443 is not forwarded at the router, so
+# these are reachable from the tailnet and the LAN, never from the internet.
+internal_hosts:
+  paperless: "docs.{{ internal_domain }}"
 
 # Nothing is served over a directly forwarded port any more: every public
 # hostname goes through the outbound-only tunnel. Plex is the sole exception
@@ -115,7 +120,6 @@ cloudflared_ingress_hosts:
   - "{{ tunnel_hosts.tandoor }}"
   - "{{ tunnel_hosts.hevy }}"
   - "{{ tunnel_hosts.immich }}"
-  - "{{ tunnel_hosts.paperless }}"
   - "{{ tunnel_hosts.audiobookshelf }}"
   - "{{ tunnel_hosts.kavita }}"
   - "{{ tunnel_hosts.shelfarr }}"

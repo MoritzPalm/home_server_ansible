@@ -70,7 +70,7 @@
       DATABASE_DIR={{ database_dir }}
       CACHE_DIR={{ cache_dir }}
       PAPERLESS_PATH={{ paperless_path }}
-      HOST_PAPERLESS={{ tunnel_hosts.paperless }}
+      HOST_PAPERLESS={{ internal_hosts.paperless }}
       HOST_AUTHENTIK={{ tunnel_hosts.authentik }}
       PAPERLESS_DB_NAME={{ paperless_db_name }}
       PAPERLESS_DB_USER={{ paperless_db_user }}

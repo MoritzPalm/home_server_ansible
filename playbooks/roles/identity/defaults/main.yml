@@ -44,11 +44,11 @@ authentik_oidc_apps:
       - authentik Admins
   - slug: paperless
     name: Paperless
-    host: "{{ tunnel_hosts.paperless }}"
+    host: "{{ internal_hosts.paperless }}"
     description: Documents
     secret_env: OIDC_PAPERLESS_SECRET
     redirect_uris:
-      - "https://{{ tunnel_hosts.paperless }}/accounts/oidc/authentik/login/callback/"
+      - "https://{{ internal_hosts.paperless }}/accounts/oidc/authentik/login/callback/"
     groups:
       - family
       - authentik Admins
