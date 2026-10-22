@@ -29,6 +29,24 @@
           max_ratio_enabled: false
           max_seeding_time_enabled: false
           max_inactive_seeding_time_enabled: false
+          autorun_enabled: true
+          autorun_program: '/bin/sh /config/scripts/books-to-cwa.sh "%L" "%F"'
+
+    - name: Ensure qBittorrent scripts dir exists
+      file:
+        path: "{{ config_path }}/qbittorrent/scripts"
+        state: directory
+        owner: 1000
+        group: 1000
+        mode: "0755"
+
+    - name: Install the on-finish hook that hands manual book grabs to CWA
+      template:
+        src: books-to-cwa.sh.j2
+        dest: "{{ config_path }}/qbittorrent/scripts/books-to-cwa.sh"
+        owner: 1000
+        group: 1000
+        mode: "0755"
 
     - name: Ensure qBittorrent config dir exists
       file:
@@ -122,7 +140,9 @@
           - -q
           - -O-
           - --post-data
-          - "json={{ qbt_prefs | to_json }}"
+          # Encoded because the form body is URL-decoded, and autorun_program's
+          # %L/%F placeholders would otherwise be read as escapes.
+          - "json={{ qbt_prefs | to_json | urlencode }}"
           - http://127.0.0.1:8088/api/v2/app/setPreferences
       register: qbt_set
       failed_when: qbt_set.rc != 0

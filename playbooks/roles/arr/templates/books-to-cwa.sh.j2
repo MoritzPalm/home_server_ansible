@@ -1,0 +1,30 @@
+#!/bin/sh
+# Managed by Ansible (roles/arr) — edits on the host are overwritten.
+#
+# qBittorrent's on-finish hook, run inside the qbittorrent container:
+#   $1  category (%L)
+#   $2  content path (%F): the file of a single-file torrent, else its folder
+#
+# Torrents in the {{ qbt_cwa_category }} category have their ebooks copied into
+# calibre-web-automated's ingest folder, which imports and then deletes them.
+# Copies rather than hardlinks, so nothing CWA does to a file during import can
+# change the copy that is seeding.
+
+set -u
+
+[ "${1:-}" = {{ qbt_cwa_category | quote }} ] || exit 0
+src=${2:?content path missing}
+
+dest=/data/downloads/cwa-ingest
+log=/config/books-to-cwa.log
+
+find "$src" -type f \( \
+  -iname '*.epub' -o -iname '*.kepub' -o -iname '*.azw' -o -iname '*.azw3' \
+  -o -iname '*.mobi' -o -iname '*.pdf' -o -iname '*.fb2' \) |
+while IFS= read -r f; do
+  if cp -n "$f" "$dest/"; then
+    echo "$(date '+%F %T') copied $f" >>"$log"
+  else
+    echo "$(date '+%F %T') FAILED $f" >>"$log"
+  fi
+done

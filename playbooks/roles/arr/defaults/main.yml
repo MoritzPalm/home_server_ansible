@@ -2,9 +2,14 @@
 # qBittorrent categories for the book stack. Shelfarr grabs and imports on its
 # own, so these exist to keep its downloads in their own save paths under
 # torrent_path, where an import can hardlink into media_path instead of copying.
+# qbt_cwa_category is for torrents added by hand: qBittorrent's on-finish hook
+# copies their ebooks into calibre-web-automated's ingest folder. It is separate
+# from "books" because Shelfarr already ingests its own downloads.
+qbt_cwa_category: "books-manual"
 qbt_book_categories:
   - { name: "books", path: "/data/downloads/torrents/books" }
   - { name: "audiobooks", path: "/data/downloads/torrents/audiobooks" }
+  - { name: "{{ qbt_cwa_category }}", path: "/data/downloads/torrents/books" }
 
 # Uptime Kuma push monitor URL for gluetun-pf-check (query string optional).
 # Empty disables the push; the check still restarts gluetun on its own.

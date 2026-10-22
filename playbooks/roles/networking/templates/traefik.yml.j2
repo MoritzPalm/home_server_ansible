@@ -40,6 +40,17 @@ entryPoints:
   # Cloudflare Access by sending a spoofed Host header to :443.
   tunnel:
     address: ":8443"
+    # cloudflared sets X-Forwarded-For to the real client IP. Without trusting
+    # it, Traefik replaces it with cloudflared's docker IP, so the access log,
+    # CrowdSec and the bouncer only ever see a whitelisted private address and
+    # nothing arriving through the tunnel can be banned. 172.16.0.0/12 covers
+    # the docker bridges; this port is not published, so only containers can
+    # reach it. Cloudflare's edge appends the connecting IP last, so a
+    # client-supplied X-Forwarded-For cannot displace it — CrowdSec's parser
+    # and the bouncer both take the rightmost untrusted entry.
+    forwardedHeaders:
+      trustedIPs:
+        - 172.16.0.0/12
     http:
       tls:
         certResolver: cloudflare
@@ -116,6 +127,16 @@ accessLog:
   # on a low-traffic home server means CrowdSec parses attacks hours after they
   # happen — or never, if the buffer never fills. Immediate writes are what make
   # the detection layer actually work; the write volume here is trivial.
+  fields:
+    headers:
+      # Headers are dropped by default so cookies and Authorization tokens
+      # never reach the log. User-Agent feeds CrowdSec's bad-user-agent and
+      # crawler scenarios; the forwarding headers record the real client IP.
+      defaultMode: drop
+      names:
+        User-Agent: keep
+        X-Forwarded-For: keep
+        Cf-Connecting-Ip: keep
 
 metrics:
   prometheus:
