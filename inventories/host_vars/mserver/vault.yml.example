@@ -133,8 +133,6 @@ lidarr_api_key: "CHANGEME"
 
 # --- monitoring ---------------------------------------------------------------
 grafana_admin_password: "CHANGEME"
-portainer_admin_password: "CHANGEME"
-portainer_license_key: "CHANGEME"
 alertmanager_discord_token: "CHANGEME"
 watchtower_discord_token: "CHANGEME"
 

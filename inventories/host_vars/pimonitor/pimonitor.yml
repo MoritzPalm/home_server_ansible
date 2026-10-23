@@ -1,4 +1,6 @@
 tailscale_hostname: "pi-monitor"
+# Advertised on join; see tailscale_tags in host_vars/mserver.
+tailscale_tags: ["tag:monitor"]
 
 tailscale_authkey: "{{ vault_tailscale_authkey_pi }}"
 
@@ -47,7 +49,6 @@ monitors:
   - { name: "mousehole",        port: 5010,  path: "/" }
   # Apps
   - { name: "Homepage",         port: 3123,  path: "/" }
-  - { name: "Portainer",        port: 9443,  path: "/", scheme: "https", ignore_tls: true }
   - { name: "Vikunja",          port: 3456,  path: "/" }
   - { name: "Tandoor",          port: 9815,  path: "/" }
   - { name: "Hevy",             port: 8123,  path: "/" }
@@ -57,6 +58,11 @@ monitors:
   - { name: "Calibre-Web",      port: 8083,  path: "/login" }
   # 5757 is the dashboard; the kosync listener on 5758 is checked publicly
   - { name: "BookBridge",       port: 5757,  path: "/" }
+
+# Monitors for services that no longer exist. Kuma keeps a monitor until it is
+# deleted, so dropping an entry above alone leaves it alerting as down.
+retired_monitors:
+  - Portainer
 
 pi_wireguard_interface: "wg0"
 

@@ -54,6 +54,15 @@
         label: "{{ item.name }}"
       no_log: true    # avoid leaking the api_token in loop output
 
+    - name: Remove monitors for retired services
+      lucasheld.uptime_kuma.monitor:
+        api_url: "{{ kuma_api_url }}"
+        api_token: "{{ kuma_login.token }}"
+        name: "{{ item }}"
+        state: absent
+      loop: "{{ retired_monitors | default([]) }}"
+      no_log: true
+
     # Checks the public path end to end — Cloudflare edge, tunnel, Traefik,
     # app — from off the network, which is the point of running Kuma on the Pi.
     # The monitors above only prove the container answers on the tailnet.

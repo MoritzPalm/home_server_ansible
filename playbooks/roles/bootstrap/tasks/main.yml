@@ -90,6 +90,7 @@
     --hostname={{ tailscale_hostname }}
     --operator={{ tailscale_operator }}
     --ssh=true
+    {{ '--advertise-tags=' ~ (tailscale_tags | join(',')) if tailscale_tags | default([]) else '' }}
   environment:
     TS_AUTHKEY: "{{ tailscale_authkey }}"
   when: bootstrap_ts_status.rc != 0 or

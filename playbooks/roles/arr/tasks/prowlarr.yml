@@ -558,6 +558,7 @@
     body_format: json
     body: "{{ prowlarr_mam_body }}"
     status_code: [200, 201]
+    timeout: 120 # prowlarr tests the tracker via the vpn on save
     return_content: true
   register: prowlarr_mam_create
 
@@ -612,6 +613,7 @@
     body_format: json
     body: "{{ prowlarr_mam_body_update }}"
     status_code: [200, 202, 400]
+    timeout: 120 # prowlarr tests the tracker via the vpn on save
     return_content: true
   register: prowlarr_mam_update
 

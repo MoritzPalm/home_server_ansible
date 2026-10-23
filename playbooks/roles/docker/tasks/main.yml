@@ -48,26 +48,36 @@
   tags:
     - docker
 
-- name: create admin password file for portainer
-  copy:
-    dest: "{{ compose_root }}/portainer/admin_password.txt"
-    owner: root
-    group: docker
-    mode: "0640"
-    content: "{{ portainer_admin_password }}"
-  no_log: true
+# Portainer is retired: it held the raw Docker socket behind a web login, and
+# Ansible already owns every stack. These remove what it left on the host.
+- name: Remove the Portainer container
+  community.docker.docker_container:
+    name: portainer
+    state: absent
+  tags:
+    - docker
 
-- name: create env file for portainer
-  copy:
-    dest: "{{ compose_root }}/portainer/.env"
-    owner: root
-    group: docker
-    mode: "0640"
-    content: |
-      HOST_IP={{ host_ip }}
-      ADMIN_PASSWORD_FILE={{ compose_root }}/portainer/admin_password.txt
-      PORTAINER_LICENSE_KEY={{ portainer_license_key }}
-  no_log: true
+- name: Remove Portainer's volume
+  community.docker.docker_volume:
+    name: portainer_data
+    state: absent
+  tags:
+    - docker
+
+- name: Remove Portainer's network
+  community.docker.docker_network:
+    name: portainer_network
+    state: absent
+  tags:
+    - docker
+
+# Holds the untracked admin_password.txt and .env the clone leaves behind.
+- name: Remove Portainer's compose directory
+  ansible.builtin.file:
+    path: "{{ compose_root }}/portainer"
+    state: absent
+  tags:
+    - docker
 
 - name: Create shared Docker networks
   community.docker.docker_network:
@@ -79,11 +89,3 @@
   tags:
     - docker
     - networking
-
-- name: run portainer docker compose file
-  community.docker.docker_compose_v2:
-    project_src: "{{ compose_root }}/portainer"
-    files: "portainer.yml"
-
-
-
