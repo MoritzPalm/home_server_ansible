@@ -333,3 +333,64 @@
   changed_when: true
   tags:
     - monitoring
+
+# --- Reboot-required metrics ---
+
+- name: Install reboot-required metrics script
+  ansible.builtin.template:
+    src: reboot-required.sh.j2
+    dest: /usr/local/bin/reboot-required-metrics
+    owner: root
+    group: root
+    mode: "0755"
+  tags:
+    - monitoring
+
+- name: Install reboot-required metrics units
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ item.name }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: "{{ item.content }}"
+  loop:
+    - name: reboot-required-metrics.service
+      content: |
+        # Managed by Ansible (roles/monitoring) — edits are overwritten.
+        [Unit]
+        Description=Publish whether package updates are waiting on a reboot
+
+        [Service]
+        Type=oneshot
+        ExecStart=/usr/local/bin/reboot-required-metrics
+    - name: reboot-required-metrics.timer
+      content: |
+        # Managed by Ansible (roles/monitoring) — edits are overwritten.
+        [Unit]
+        Description=Refresh reboot-required metrics
+
+        [Timer]
+        OnBootSec=2min
+        OnUnitActiveSec=15min
+
+        [Install]
+        WantedBy=timers.target
+  loop_control:
+    label: "{{ item.name }}"
+  tags:
+    - monitoring
+
+- name: Enable reboot-required metrics timer
+  ansible.builtin.systemd:
+    name: reboot-required-metrics.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags:
+    - monitoring
+
+- name: Publish reboot-required metrics now
+  ansible.builtin.command: /usr/local/bin/reboot-required-metrics
+  changed_when: true
+  tags:
+    - monitoring

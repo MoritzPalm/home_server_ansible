@@ -6,18 +6,42 @@
       - authentik_secret_key | length >= 50
       - authentik_postgres_password is defined
       - authentik_postgres_password | length > 0
-      - authentik_bootstrap_password is defined
-      - authentik_bootstrap_password | length > 0
-      - authentik_bootstrap_token is defined
-      - authentik_bootstrap_token | length > 0
     fail_msg: >-
       Missing authentik secrets in inventories/host_vars/mserver/vault.yml.
       Generate each with 'openssl rand -base64 60 | tr -d "\n"':
       vault_authentik_secret_key (signs sessions and tokens — rotating it logs
-      everyone out and invalidates issued tokens),
-      vault_authentik_postgres_password,
-      vault_authentik_bootstrap_password and vault_authentik_bootstrap_token
-      (consumed only on first start to create the initial admin).
+      everyone out and invalidates issued tokens) and
+      vault_authentik_postgres_password.
+  tags: [identity]
+
+# PG_VERSION is written by initdb, so its absence means authentik will start
+# against an empty database: a fresh install, or a rebuild before the pg_dump
+# restore.
+- name: Check whether authentik's database is initialised
+  ansible.builtin.stat:
+    path: "{{ database_dir }}/authentik/PG_VERSION"
+  register: authentik_pg_version
+  tags: [identity]
+
+- name: Decide whether to pass bootstrap credentials
+  ansible.builtin.set_fact:
+    authentik_bootstrap_active: >-
+      {{ (not authentik_pg_version.stat.exists)
+         if (authentik_bootstrap | string) == 'auto'
+         else (authentik_bootstrap | bool) }}
+  tags: [identity]
+
+- name: Assert bootstrap secrets are vaulted when bootstrapping
+  ansible.builtin.assert:
+    that:
+      - authentik_bootstrap_password | default('') | length > 0
+      - authentik_bootstrap_token | default('') | length > 0
+    fail_msg: >-
+      authentik is about to bootstrap but vault_authentik_bootstrap_password or
+      vault_authentik_bootstrap_token is missing. Without them a fresh database
+      serves the public initial-setup flow, which lets whoever reaches it
+      first set the admin password.
+  when: authentik_bootstrap_active | bool
   tags: [identity]
 
 # Derived from the app list rather than named one by one, because the hand-written
@@ -85,9 +109,6 @@
       INTERNAL_DOMAIN={{ internal_domain }}
       AUTHENTIK_SECRET_KEY={{ authentik_secret_key }}
       AUTHENTIK_POSTGRES_PASSWORD={{ authentik_postgres_password }}
-      AUTHENTIK_BOOTSTRAP_PASSWORD={{ authentik_bootstrap_password }}
-      AUTHENTIK_BOOTSTRAP_TOKEN={{ authentik_bootstrap_token }}
-      AUTHENTIK_BOOTSTRAP_EMAIL={{ acme_email }}
       OIDC_VIKUNJA_SECRET={{ oidc_vikunja_secret }}
       OIDC_TANDOOR_SECRET={{ oidc_tandoor_secret }}
       OIDC_IMMICH_SECRET={{ oidc_immich_secret }}
@@ -96,6 +117,27 @@
       OIDC_KAVITA_SECRET={{ oidc_kavita_secret }}
       OIDC_SHELFARR_SECRET={{ oidc_shelfarr_secret }}
       OIDC_CWA_SECRET={{ oidc_cwa_secret }}
+  no_log: true
+  tags: [identity]
+
+# Always written: identity.yml lists it under env_file, and compose fails on a
+# missing env_file. Empty unless bootstrapping, so the next run after the
+# database exists removes the credentials from the container.
+- name: Create bootstrap env file for authentik
+  ansible.builtin.copy:
+    dest: "{{ compose_root }}/identity/bootstrap.env"
+    owner: root
+    group: docker
+    mode: "0640"
+    content: |
+      # Managed by Ansible (roles/identity) — edits on the host are overwritten.
+      {% if authentik_bootstrap_active | bool %}
+      AUTHENTIK_BOOTSTRAP_PASSWORD={{ authentik_bootstrap_password }}
+      AUTHENTIK_BOOTSTRAP_TOKEN={{ authentik_bootstrap_token }}
+      AUTHENTIK_BOOTSTRAP_EMAIL={{ acme_email }}
+      {% else %}
+      # Empty: the database is initialised (see authentik_bootstrap).
+      {% endif %}
   no_log: true
   tags: [identity]
 
@@ -115,6 +157,7 @@
     - 00-groups.yaml
     - 10-proxy-providers.yaml
     - 20-oidc-providers.yaml
+    - 30-mfa.yaml
   tags: [identity]
 
 - name: Run identity compose file

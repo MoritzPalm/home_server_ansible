@@ -40,6 +40,27 @@ groups:
           summary: "Root disk low ({{ $value | printf \"%.1f\" }}% free)"
           description: "Root filesystem has less than 10% free."
 
+      # unattended-upgrades installs kernel and library updates but never
+      # reboots (roles/base), so they are not running until the host restarts.
+      # These two read the reboot-required textfile collector.
+      - alert: HostRebootRequired
+        expr: (time() - home_server_reboot_required_since_seconds) > 259200 and home_server_reboot_required == 1
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Reboot pending for {{ $value | humanizeDuration }}"
+          description: "Installed updates, typically a kernel, take effect only after a reboot. /var/run/reboot-required.pkgs lists them."
+
+      - alert: RebootRequiredMetricsStale
+        expr: time() - node_textfile_mtime_seconds{file="reboot_required.prom"} > 7200
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Reboot-required metrics are {{ $value | humanizeDuration }} old"
+          description: "reboot-required-metrics.timer is not running or is failing; a pending kernel update would go unnoticed."
+
   - name: storage
     interval: 60s
     rules:

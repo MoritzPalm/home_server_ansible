@@ -1,4 +1,15 @@
 ---
+# Passes AUTHENTIK_BOOTSTRAP_* to authentik_server. Only a fresh database reads
+# them, to create akadmin and a non-expiring API token; without them a fresh
+# database serves a public initial-setup flow instead. 'auto' passes them only
+# while the database is uninitialised, because the container environment stays
+# readable through the Docker API. true/false override the check.
+authentik_bootstrap: auto
+
+# Users without an MFA device are made to enrol one at their next login
+# (TOTP or WebAuthn) instead of signing in with a password alone.
+authentik_mfa_required: true
+
 authentik_proxy_apps:
   - slug: homepage
     name: Homepage

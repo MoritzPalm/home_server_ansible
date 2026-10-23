@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Managed by Ansible (roles/monitoring) — edits on the host are overwritten.
+#
+# unattended-upgrades installs kernel and library updates but never reboots
+# (roles/base), so they take effect only at the next restart. This publishes
+# whether one is pending, and since when.
+
+set -euo pipefail
+
+TEXTFILE="{{ backup_textfile_dir }}/reboot_required.prom"
+FLAG=/var/run/reboot-required
+
+required=0
+since=0
+if [ -e "$FLAG" ]; then
+  required=1
+  # The flag is rewritten each time another package asks for a reboot, so its
+  # mtime is the latest request. The first-seen time is carried over instead.
+  since=$(awk '$1 == "home_server_reboot_required_since_seconds" { print $2 }' "$TEXTFILE" 2>/dev/null || true)
+  if [ -z "$since" ] || [ "$since" = 0 ]; then
+    since=$(stat -c %Y "$FLAG")
+  fi
+fi
+
+# Written via .tmp and renamed so node-exporter never reads a half-written file.
+cat > "${TEXTFILE}.tmp" <<EOF
+# HELP home_server_reboot_required Whether installed package updates are waiting on a reboot.
+# TYPE home_server_reboot_required gauge
+home_server_reboot_required ${required}
+# HELP home_server_reboot_required_since_seconds Unix time the pending reboot was first seen, 0 if none.
+# TYPE home_server_reboot_required_since_seconds gauge
+home_server_reboot_required_since_seconds ${since}
+EOF
+chmod 0644 "${TEXTFILE}.tmp"
+mv "${TEXTFILE}.tmp" "${TEXTFILE}"

@@ -98,13 +98,10 @@ internal_hosts:
 # firewall role's DOCKER-USER rules.
 #
 # These are CONTAINER ports, not host ports: DOCKER-USER hangs off FORWARD and
-# sees packets after Docker's DNAT has rewritten the destination. Plex is
-# therefore 32400 here even though the host publishes 32401 — writing 32401
-# would look correct and silently never match.
+# sees packets after Docker's DNAT has rewritten the destination. Plex
+# publishes 32400:32400, so the two coincide; if the host side is ever
+# remapped, this entry must stay the container port or it never matches.
 #
-# Plex is listed from the start because its remote access already works today —
-# an empty list would take a working service down. 443 stays commented until
-# Traefik exists and the Fritz!Box forward + IPv6 pinhole are configured.
 # Plex is the ONLY inbound port. Everything else reaches the internet through
 # the outbound-only Cloudflare Tunnel, so there is nothing else to forward.
 wan_allowed_container_ports:

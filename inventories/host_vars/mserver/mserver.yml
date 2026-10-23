@@ -24,9 +24,11 @@ crowdsec_bouncer_key: "{{ vault_crowdsec_bouncer_key }}"
 # secret_key signs sessions and tokens — rotating it logs everyone out.
 authentik_secret_key: "{{ vault_authentik_secret_key }}"
 authentik_postgres_password: "{{ vault_authentik_postgres_password }}"
-# Bootstrap values are read only on first start, to create the initial admin.
-authentik_bootstrap_password: "{{ vault_authentik_bootstrap_password }}"
-authentik_bootstrap_token: "{{ vault_authentik_bootstrap_token }}"
+# Bootstrap values are read only on a fresh database, to create the initial
+# admin. roles/identity passes them to the container only while the database
+# is uninitialised (authentik_bootstrap), so keep them vaulted for rebuilds.
+authentik_bootstrap_password: "{{ vault_authentik_bootstrap_password | default('') }}"
+authentik_bootstrap_token: "{{ vault_authentik_bootstrap_token | default('') }}"
 
 # Cloudflare Tunnel. Both come from 'cloudflared tunnel create <name>':
 # the UUID it prints, and the entire contents of the credentials JSON it writes.

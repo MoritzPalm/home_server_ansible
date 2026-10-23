@@ -43,7 +43,8 @@ vault_crowdsec_bouncer_key: "CHANGEME"
 # secret_key signs sessions and tokens — rotating it logs everyone out.
 vault_authentik_secret_key: "CHANGEME"
 vault_authentik_postgres_password: "CHANGEME"
-# Read only on first start, to create the initial admin.
+# Read only on a fresh database, to create the initial admin. Passed to the
+# container only while the database is uninitialised; a rebuild needs them.
 vault_authentik_bootstrap_password: "CHANGEME"
 vault_authentik_bootstrap_token: "CHANGEME"
 

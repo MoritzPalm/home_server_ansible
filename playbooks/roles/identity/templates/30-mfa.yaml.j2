@@ -1,0 +1,28 @@
+# Managed by Ansible (roles/identity) — edits on the host are overwritten.
+#
+# Sets the MFA stage of authentik's stock authentication flow. The stock
+# blueprint declares this stage with no attributes, so re-applying it does not
+# reset these values.
+version: 1
+metadata:
+  name: homeserver-mfa
+  labels:
+    blueprints.goauthentik.io/instantiate: "true"
+entries:
+  - model: authentik_stages_authenticator_validate.authenticatorvalidatestage
+    state: present
+    identifiers:
+      name: default-authentication-mfa-validation
+    attrs:
+{% if authentik_mfa_required | bool %}
+      # A user with no device must set one up through these stages before the
+      # login completes. Applies to every account, including family members.
+      not_configured_action: configure
+      configuration_stages:
+        - !Find [authentik_stages_authenticator_webauthn.authenticatorwebauthnstage, [name, default-authenticator-webauthn-setup]]
+        - !Find [authentik_stages_authenticator_totp.authenticatortotpstage, [name, default-authenticator-totp-setup]]
+{% else %}
+      # authentik's default: a user with no device logs in with a password alone.
+      not_configured_action: skip
+      configuration_stages: []
+{% endif %}
