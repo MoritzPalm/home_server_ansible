@@ -1,0 +1,120 @@
+# Managed by Ansible (roles/kitchen). Piped into `manage.py shell` inside the
+# tandoor container; never written to disk on the host.
+#
+# Seeds a space with Tandoor's open data (units, supermarket categories,
+# nutrition property types, stores, foods, unit conversions) and with the
+# import automations below. Safe to re-run: existing objects are matched by
+# open-data slug or name and left alone, so hand edits in the UI survive.
+#
+# The last line of output is `TANDOOR_BOOTSTRAP_RESULT {json}`; the task reads
+# `changed` from it.
+
+import json
+from types import SimpleNamespace
+
+from django.db import transaction
+from django_scopes import scope, scopes_disabled
+
+from cookbook.helper.HelperFunctions import safe_request
+from cookbook.helper.open_data_importer import OpenDataImporter
+from cookbook.models import Automation, Space
+
+OPEN_DATA_VERSION = {{ tandoor_open_data_version | default('de') | to_json }}
+OPEN_DATA_URL = 'https://raw.githubusercontent.com/TandoorRecipes/open-tandoor-data/main/build/{}.json'
+SPACE_NAME = {{ tandoor_bootstrap_space | default('') | to_json }}
+
+# UNIT_ALIAS matches the whole parsed unit case-insensitively and renames it to
+# a unit the open data already defines, so imported recipes do not each create
+# their own "Esslöffel", "EL." and "Eßl.".
+AUTOMATIONS = json.loads({{ tandoor_automations | default([
+    {'type': 'UNIT_ALIAS', 'param_1': 'Esslöffel', 'param_2': 'EL'},
+    {'type': 'UNIT_ALIAS', 'param_1': 'Eßlöffel', 'param_2': 'EL'},
+    {'type': 'UNIT_ALIAS', 'param_1': 'EL.', 'param_2': 'EL'},
+    {'type': 'UNIT_ALIAS', 'param_1': 'Teelöffel', 'param_2': 'TL'},
+    {'type': 'UNIT_ALIAS', 'param_1': 'TL.', 'param_2': 'TL'},
+    {'type': 'UNIT_ALIAS', 'param_1': 'Gramm', 'param_2': 'g'},
+    {'type': 'UNIT_ALIAS', 'param_1': 'gr', 'param_2': 'g'},
+    {'type': 'UNIT_ALIAS', 'param_1': 'gr.', 'param_2': 'g'},
+    {'type': 'UNIT_ALIAS', 'param_1': 'Kilogramm', 'param_2': 'kg'},
+    {'type': 'UNIT_ALIAS', 'param_1': 'Milliliter', 'param_2': 'ml'},
+    {'type': 'UNIT_ALIAS', 'param_1': 'Liter', 'param_2': 'l'},
+    {'type': 'UNIT_ALIAS', 'param_1': 'Stk', 'param_2': 'Stück'},
+    {'type': 'UNIT_ALIAS', 'param_1': 'Stk.', 'param_2': 'Stück'},
+    {'type': 'UNIT_ALIAS', 'param_1': 'Prisen', 'param_2': 'Prise'},
+    {'type': 'UNIT_ALIAS', 'param_1': 'Dosen', 'param_2': 'Dose'},
+    {'type': 'UNIT_ALIAS', 'param_1': 'Flaschen', 'param_2': 'Flasche'},
+]) | to_json | to_json }})
+
+# Order matters: foods reference units, categories and property types by slug,
+# and conversions reference foods and units.
+DATATYPES = ['unit', 'category', 'property', 'store', 'food', 'conversion']
+
+
+def target_space():
+    with scopes_disabled():
+        if SPACE_NAME:
+            return Space.objects.get(name=SPACE_NAME)
+        # SOCIAL_DEFAULT_ACCESS puts new OIDC users into Space.objects.first(),
+        # so that is the shared household space.
+        space = Space.objects.order_by('pk').first()
+        if space is None:
+            raise SystemExit('tandoor bootstrap: no space exists yet; log in once to create it')
+        return space
+
+
+def seed_open_data(space):
+    response = safe_request('GET', OPEN_DATA_URL.format(OPEN_DATA_VERSION))
+    response.raise_for_status()
+    data = json.loads(response.content)
+
+    # The importer only touches request.space and request.user.
+    request = SimpleNamespace(space=space, user=space.created_by)
+    importer = OpenDataImporter(request, data, update_existing=False, use_metric=True)
+    steps = {
+        'unit': importer.import_units,
+        'category': importer.import_category,
+        'property': importer.import_property,
+        'store': importer.import_supermarket,
+        'food': importer.import_food,
+        'conversion': importer.import_conversion,
+    }
+    return {datatype: steps[datatype]().to_dict() for datatype in DATATYPES}
+
+
+def seed_automations(space):
+    created, updated = [], []
+    for a in AUTOMATIONS:
+        existing = Automation.objects.filter(
+            space=space, type=a['type'], param_1__iexact=a['param_1'],
+        ).first()
+        name = a.get('name') or f"{a['param_1']} → {a.get('param_2', '')}"
+        if existing is None:
+            Automation.objects.create(
+                space=space, created_by=space.created_by, type=a['type'], name=name,
+                param_1=a['param_1'], param_2=a.get('param_2'), param_3=a.get('param_3'),
+            )
+            created.append(name)
+        elif existing.param_2 != a.get('param_2') or existing.param_3 != a.get('param_3'):
+            existing.param_2 = a.get('param_2')
+            existing.param_3 = a.get('param_3')
+            existing.save()
+            updated.append(name)
+    return {'created': created, 'updated': updated}
+
+
+space = target_space()
+with scope(space=space), transaction.atomic():
+    open_data = seed_open_data(space)
+    automations = seed_automations(space)
+
+changed = (
+    any(r['total_created'] or r['total_updated'] for r in open_data.values())
+    or bool(automations['created'] or automations['updated'])
+)
+print('TANDOOR_BOOTSTRAP_RESULT ' + json.dumps({
+    'changed': changed,
+    'space': space.name,
+    'open_data_version': OPEN_DATA_VERSION,
+    'open_data': open_data,
+    'automations': automations,
+}, ensure_ascii=False))
