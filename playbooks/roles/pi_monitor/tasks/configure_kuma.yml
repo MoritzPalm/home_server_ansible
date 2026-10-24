@@ -61,7 +61,7 @@
         name: "{{ item }}"
         state: absent
       loop: "{{ retired_monitors | default([]) }}"
-      no_log: true
+      no_log: false 
 
     # Checks the public path end to end — Cloudflare edge, tunnel, Traefik,
     # app — from off the network, which is the point of running Kuma on the Pi.

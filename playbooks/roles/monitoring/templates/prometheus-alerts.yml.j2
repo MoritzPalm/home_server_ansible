@@ -4,23 +4,30 @@ groups:
   - name: host
     interval: 30s
     rules:
+      # iowait and steal are excluded: they are time the CPU sat waiting, not
+      # work. Counted as busy, nightly backup and HDD I/O pushed "CPU" past 80%
+      # while user+system peaked at 72%.
       - alert: HostHighCpuLoad
-        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
-        for: 5m
+        expr: >
+          sum by(instance) (rate(node_cpu_seconds_total{mode!~"idle|iowait|steal"}[5m]))
+          / count by(instance) (node_cpu_seconds_total{mode="idle"}) * 100 > 80
+        for: 15m
         labels:
           severity: warning
         annotations:
           summary: "High CPU ({{ $value | printf \"%.1f\" }}%)"
-          description: "CPU has been above 80% for 5 minutes."
+          description: "CPU (excluding iowait) has been above 80% for 15 minutes."
 
+      # Linux load includes tasks blocked on disk, so short HDD-heavy jobs
+      # spike it. 30m keeps only sustained contention.
       - alert: HostHighLoad
         expr: node_load15 / count without(cpu, mode) (node_cpu_seconds_total{mode="idle"}) > 1.5
-        for: 10m
+        for: 30m
         labels:
           severity: warning
         annotations:
           summary: "High load average ({{ $value | printf \"%.2f\" }} per core)"
-          description: "15-minute load average per core has been above 1.5 for 10 minutes."
+          description: "15-minute load average per core has been above 1.5 for 30 minutes."
 
       - alert: HostLowMemory
         expr: (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 10
@@ -157,14 +164,29 @@ groups:
   - name: containers
     interval: 30s
     rules:
+      # Reads the container-health textfile, not cAdvisor: an exited
+      # container's cAdvisor series goes stale within 5m and the alert would
+      # resolve on its own while the container stayed down.
       - alert: ContainerDown
-        expr: time() - container_last_seen{name!="", name!~".*POD.*"} > 90
-        for: 2m
+        expr: home_server_container_running == 0
+        for: 5m
         labels:
           severity: critical
         annotations:
           summary: "Container {{ $labels.name }} down"
-          description: "Container {{ $labels.name }} has not been seen for more than 2 minutes."
+          description: "Container {{ $labels.name }} exists but has not been running for 5 minutes. Check 'docker ps -a' and 'docker logs {{ $labels.name }}'."
+
+      # Every other cAdvisor rule in this group matches nothing when cAdvisor
+      # cannot reach the docker API, because it then exports only the root
+      # cgroup. That went unnoticed from Aug to Oct 2026.
+      - alert: CadvisorNoContainers
+        expr: absent(container_last_seen{name!=""}) and on() (up{job="cadvisor"} == 1)
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "cAdvisor reports no containers"
+          description: "cAdvisor is up but sees no docker containers, so OOM, restart-loop and resource alerts cannot fire. Check that it reaches the docker API through dockerproxy."
 
       # value is normalised to the whole host (100% = all cores), otherwise a
       # single transcode or ML job crossing one core would page constantly
@@ -252,8 +274,10 @@ groups:
   - name: services
     interval: 60s
     rules:
+      # cloudflared, crowdsec and authentik have dedicated alerts in the
+      # ingress group that say what their absence breaks.
       - alert: PrometheusTargetDown
-        expr: up == 0
+        expr: up{job!~"cloudflared|crowdsec|authentik"} == 0
         for: 5m
         labels:
           severity: warning
@@ -359,11 +383,15 @@ groups:
 
       # The tunnel is the only ingress path. If it is down, every public
       # hostname is unreachable, and nothing else here will notice.
+      #
+      # The name label on this and the other ingress *Down alerts matches the
+      # container, so alertmanager can inhibit the generic container alerts.
       - alert: CloudflaredTunnelDown
         expr: up{job="cloudflared"} == 0
         for: 2m
         labels:
           severity: critical
+          name: cloudflared
         annotations:
           summary: "cloudflared is not being scraped"
           description: "The Cloudflare Tunnel is down or unreachable. All public hostnames are offline."
@@ -397,6 +425,7 @@ groups:
         for: 5m
         labels:
           severity: warning
+          name: crowdsec
         annotations:
           summary: "CrowdSec is not being scraped"
           description: "The bouncer fails open when the LAPI is unreachable, so requests are no longer being filtered."
@@ -417,6 +446,7 @@ groups:
         for: 5m
         labels:
           severity: critical
+          name: authentik_server
         annotations:
           summary: "authentik is not being scraped"
           description: "SSO is unavailable: forward-auth protected hosts will fail closed and OIDC logins will not complete."

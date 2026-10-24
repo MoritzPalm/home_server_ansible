@@ -134,6 +134,9 @@ lidarr_api_key: "CHANGEME"
 # --- monitoring ---------------------------------------------------------------
 grafana_admin_password: "CHANGEME"
 alertmanager_discord_token: "CHANGEME"
+# Optional full webhook URL for warning-severity alerts, so they can go to a
+# channel with phone notifications muted. Unset, warnings use the one above.
+# alertmanager_discord_warning_url: "https://discord.com/api/webhooks/ID/TOKEN"
 watchtower_discord_token: "CHANGEME"
 
 # --- downloads / scrobbling ---------------------------------------------------

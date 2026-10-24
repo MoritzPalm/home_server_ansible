@@ -3,9 +3,16 @@
 
 - name: Base packages present
   apt:
-    name: [ca-certificates, curl, gnupg, ufw, fail2ban, unattended-upgrades, update-notifier-common, tmux, htop, git, tree, plocate, apparmor, apparmor-utils]
+    name: [ca-certificates, curl, gnupg, ufw, fail2ban, unattended-upgrades, tmux, htop, git, tree, plocate, apparmor, apparmor-utils]
     state: present
     update_cache: true
+
+# Writes /var/run/reboot-required, which roles/monitoring alerts on. Ubuntu-only.
+- name: Reboot-required flag package present
+  apt:
+    name: update-notifier-common
+    state: present
+  when: ansible_distribution == 'Ubuntu'
 
 - name: Install admin authorized_keys
   ansible.posix.authorized_key:

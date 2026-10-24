@@ -1,21 +1,31 @@
+{% set discord_webhook_url = "https://discord.com/api/webhooks/" ~ (alertmanager_discord_id | default(watchtower_discord_id)) ~ "/" ~ (alertmanager_discord_token | default(watchtower_discord_token)) %}
 global:
   resolve_timeout: 5m
 
+# Warnings are slow-moving (a disk filling, a pending reboot) and are re-sent
+# daily; criticals every 4h until resolved.
 route:
   group_by: ['alertname', 'severity']
   group_wait: 30s
   group_interval: 5m
-  repeat_interval: 4h
-  receiver: discord
+  repeat_interval: 24h
+  receiver: discord-warning
   routes:
     - matchers:
         - severity = critical
-      repeat_interval: 1h
+      receiver: discord
+      repeat_interval: 4h
 
 receivers:
   - name: discord
     discord_configs:
-      - webhook_url: "https://discord.com/api/webhooks/{{ alertmanager_discord_id | default(watchtower_discord_id) }}/{{ alertmanager_discord_token | default(watchtower_discord_token) }}"
+      - webhook_url: "{{ discord_webhook_url }}"
+        send_resolved: true
+  # A separate webhook lets warnings go to a channel with phone notifications
+  # muted. Without alertmanager_discord_warning_url they share the one above.
+  - name: discord-warning
+    discord_configs:
+      - webhook_url: "{{ alertmanager_discord_warning_url | default(discord_webhook_url) }}"
         send_resolved: true
 
 inhibit_rules:
@@ -44,3 +54,26 @@ inhibit_rules:
       - alertname = StorageCritical
     target_matchers:
       - alertname =~ "BackupStorage(Low|Critical)"
+  - source_matchers:
+      - alertname = StorageCritical
+    target_matchers:
+      - alertname = StorageWillFillUp
+  - source_matchers:
+      - alertname = TlsCertExpiringCritical
+    target_matchers:
+      - alertname = TlsCertExpiringSoon
+    equal: ['cn']
+  # The ingress *Down alerts carry the container's name label and already say
+  # what the outage breaks. A cloudflared outage otherwise also fired
+  # ContainerUnhealthy for it.
+  - source_matchers:
+      - alertname =~ "CloudflaredTunnelDown|AuthentikDown|CrowdsecDown"
+    target_matchers:
+      - alertname =~ "ContainerDown|ContainerUnhealthy|ContainerRestartLoop"
+    equal: ['name']
+  # A container that is not running still reports its last health verdict.
+  - source_matchers:
+      - alertname = ContainerDown
+    target_matchers:
+      - alertname = ContainerUnhealthy
+    equal: ['name']
