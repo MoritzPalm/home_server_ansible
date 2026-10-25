@@ -4,11 +4,15 @@
   vars:
     ansible_python_interpreter: "{{ ansible_playbook_python }}"
     kuma_api_url: "http://{{ hostvars[inventory_hostname].ansible_host }}:{{ uptime_kuma_port }}"
+    # The first request after login waits while Kuma sends heartbeat history
+    # for every monitor, which takes over the 10s default on the Pi's SD card.
+    kuma_api_timeout: "{{ kuma_api_timeout_seconds | default(60) }}"
   block:
 
     - name: Create the Uptime Kuma admin account (fresh install only)
       lucasheld.uptime_kuma.setup:
         api_url: "{{ kuma_api_url }}"
+        api_timeout: "{{ kuma_api_timeout }}"
         api_username: "{{ uptime_kuma_admin_user }}"
         api_password: "{{ uptime_kuma_admin_password }}"
       register: kuma_setup
@@ -18,6 +22,7 @@
     - name: Log in to Uptime Kuma
       lucasheld.uptime_kuma.login:
         api_url: "{{ kuma_api_url }}"
+        api_timeout: "{{ kuma_api_timeout }}"
         api_username: "{{ uptime_kuma_admin_user }}"
         api_password: "{{ uptime_kuma_admin_password }}"
       register: kuma_login
@@ -26,6 +31,7 @@
     - name: Ensure the Discord notification exists
       lucasheld.uptime_kuma.notification:
         api_url: "{{ kuma_api_url }}"
+        api_timeout: "{{ kuma_api_timeout }}"
         api_token: "{{ kuma_login.token }}"
         name: "Discord"
         type: "discord"
@@ -39,6 +45,7 @@
     - name: Ensure a monitor exists for each service
       lucasheld.uptime_kuma.monitor:
         api_url: "{{ kuma_api_url }}"
+        api_timeout: "{{ kuma_api_timeout }}"
         api_token: "{{ kuma_login.token }}"
         name: "{{ item.name }}"
         type: "http"
@@ -57,6 +64,7 @@
     - name: Remove monitors for retired services
       lucasheld.uptime_kuma.monitor:
         api_url: "{{ kuma_api_url }}"
+        api_timeout: "{{ kuma_api_timeout }}"
         api_token: "{{ kuma_login.token }}"
         name: "{{ item }}"
         state: absent
@@ -73,6 +81,7 @@
     - name: Ensure a monitor exists for each public hostname
       lucasheld.uptime_kuma.monitor:
         api_url: "{{ kuma_api_url }}"
+        api_timeout: "{{ kuma_api_timeout }}"
         api_token: "{{ kuma_login.token }}"
         name: "public: {{ item.key }}"
         type: "http"
