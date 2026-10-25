@@ -82,5 +82,8 @@ pi_script:
   venv: "/home/moritzpalm/network_watcher/.venv"
 
 # --- scan relay ---------------------------------------------------------------
+# smbd serves the scan inbox here, so roles/base must leave it unmasked.
+base_masked_services:
+  - nmbd
 scan_relay_smb_password: "{{ vault_scan_relay_smb_password | default('') }}"
 scan_relay_paperless_token: "{{ vault_paperless_scanner_token | default('') }}"

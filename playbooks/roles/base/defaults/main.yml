@@ -1,0 +1,6 @@
+---
+# Masked so a samba package pulled in as a dependency never starts a file
+# server. Hosts that serve SMB on purpose override this (host_vars/pimonitor).
+base_masked_services:
+  - smbd
+  - nmbd

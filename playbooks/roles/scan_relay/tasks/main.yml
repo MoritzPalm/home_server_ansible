@@ -66,9 +66,12 @@
   no_log: true
   tags: [scan_relay]
 
+# Unmasked explicitly: roles/base masks smbd unless base_masked_services is
+# overridden for this host.
 - name: Enable smbd
   ansible.builtin.systemd_service:
     name: smbd
+    masked: false
     enabled: true
     state: started
   tags: [scan_relay]
@@ -78,6 +81,7 @@
   ansible.builtin.systemd_service:
     name: nmbd
     enabled: false
+    masked: true
     state: stopped
   tags: [scan_relay]
 

@@ -28,6 +28,21 @@
       register: kuma_login
       no_log: true
 
+    # set_settings sends every setting, filling unset ones with the library's
+    # defaults, so all values that differ from those are listed here; a task
+    # setting only retention would reset the timezone. Retention bounds the
+    # heartbeat table, which Kuma sends on every connect and which made the
+    # first API call outlast the client timeout at 180 days.
+    - name: Configure Uptime Kuma settings
+      lucasheld.uptime_kuma.settings:
+        api_url: "{{ kuma_api_url }}"
+        api_timeout: "{{ kuma_api_timeout }}"
+        api_token: "{{ kuma_login.token }}"
+        keepDataPeriodDays: "{{ kuma_keep_data_days | default(30) }}"
+        serverTimezone: "{{ timezone }}"
+        tlsExpiryNotifyDays: [7, 14, 21]
+      no_log: true
+
     - name: Ensure the Discord notification exists
       lucasheld.uptime_kuma.notification:
         api_url: "{{ kuma_api_url }}"
