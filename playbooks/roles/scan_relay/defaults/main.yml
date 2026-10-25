@@ -1,0 +1,31 @@
+---
+# Relays scans from a network scanner on the Pi's LAN into Paperless. The
+# scanner writes to an SMB share here; a timer uploads finished files to the
+# Paperless API over the tailnet. The scanner itself never needs tailnet access.
+
+scan_relay_user: scanner
+scan_relay_root: /srv/scans
+scan_relay_inbox: "{{ scan_relay_root }}/inbox"
+# Uploaded files are kept here for scan_relay_keep_days. The API answers once a
+# file is queued, not once it is consumed, so this is the copy to re-upload from
+# if consumption fails. 0 deletes immediately after upload.
+scan_relay_sent: "{{ scan_relay_root }}/sent"
+scan_relay_keep_days: 7
+# Files Paperless rejected outright (400/413/415). Kept until removed by hand.
+scan_relay_failed: "{{ scan_relay_root }}/failed"
+
+# SMB writes have no temp-name-then-rename step, so a file still being written
+# looks complete. Only files untouched for this long are uploaded.
+scan_relay_min_age_seconds: 60
+scan_relay_interval: 1min
+
+# The scanner's network. smbd binds only to these interfaces and accepts only
+# this subnet; the tailnet and the wg0 tunnel into the home LAN are excluded.
+scan_relay_interfaces: [eth0, wlan0]
+scan_relay_lan_subnet: 192.168.50.0/24
+
+scan_relay_share: scans
+scan_relay_smb_password: ""
+
+scan_relay_paperless_url: "https://{{ internal_hosts.paperless }}"
+scan_relay_paperless_token: ""

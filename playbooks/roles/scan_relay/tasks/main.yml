@@ -1,0 +1,142 @@
+---
+- name: Fail if scan relay secrets are unset
+  ansible.builtin.assert:
+    that:
+      - scan_relay_smb_password | length > 0
+      - scan_relay_paperless_token | length > 0
+    fail_msg: >-
+      Missing scan relay secrets in host_vars/pimonitor/vault.yml. Required:
+      vault_scan_relay_smb_password, vault_paperless_scanner_token (the same
+      value as in host_vars/mserver/vault.yml)
+  tags: [scan_relay]
+
+- name: Install samba
+  ansible.builtin.apt:
+    name: [samba, curl]
+    state: present
+    update_cache: true
+  tags: [scan_relay]
+
+# No login shell and no home: the account exists only to own the share and run
+# the uploader.
+- name: Create scan relay user
+  ansible.builtin.user:
+    name: "{{ scan_relay_user }}"
+    system: true
+    shell: /usr/sbin/nologin
+    create_home: false
+  tags: [scan_relay]
+
+- name: Create scan relay directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ scan_relay_user }}"
+    group: "{{ scan_relay_user }}"
+    mode: "0700"
+  loop:
+    - "{{ scan_relay_root }}"
+    - "{{ scan_relay_inbox }}"
+    - "{{ scan_relay_sent }}"
+    - "{{ scan_relay_failed }}"
+  tags: [scan_relay]
+
+- name: Render smb.conf
+  ansible.builtin.template:
+    src: smb.conf.j2
+    dest: /etc/samba/smb.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: testparm -s %s
+  notify: Restart smbd
+  tags: [scan_relay]
+
+# smbpasswd cannot report whether the stored password already matches, so this
+# sets it on every run and reports no change. The vault is the source of truth.
+- name: Set the SMB password for the scan relay user
+  ansible.builtin.shell: >-
+    set -o pipefail &&
+    printf '%s\n%s\n' "$PW" "$PW" | smbpasswd -s -a {{ scan_relay_user }}
+  args:
+    executable: /bin/bash
+  environment:
+    PW: "{{ scan_relay_smb_password }}"
+  changed_when: false
+  no_log: true
+  tags: [scan_relay]
+
+- name: Enable smbd
+  ansible.builtin.systemd_service:
+    name: smbd
+    enabled: true
+    state: started
+  tags: [scan_relay]
+
+# NetBIOS name service is disabled in smb.conf; scanners address the share by IP.
+- name: Disable nmbd
+  ansible.builtin.systemd_service:
+    name: nmbd
+    enabled: false
+    state: stopped
+  tags: [scan_relay]
+
+- name: Allow SMB from the scanner's LAN
+  community.general.ufw:
+    rule: allow
+    port: "445"
+    proto: tcp
+    from_ip: "{{ scan_relay_lan_subnet }}"
+    comment: "SMB scan inbox"
+  tags: [scan_relay, firewall]
+
+- name: Write the scan relay environment file
+  ansible.builtin.copy:
+    dest: /etc/scan-relay.env
+    owner: root
+    group: "{{ scan_relay_user }}"
+    mode: "0640"
+    content: |
+      PAPERLESS_URL={{ scan_relay_paperless_url }}
+      PAPERLESS_TOKEN={{ scan_relay_paperless_token }}
+      SCAN_RELAY_INBOX={{ scan_relay_inbox }}
+      SCAN_RELAY_SENT={{ scan_relay_sent }}
+      SCAN_RELAY_FAILED={{ scan_relay_failed }}
+      SCAN_RELAY_MIN_AGE={{ scan_relay_min_age_seconds }}
+      SCAN_RELAY_KEEP_DAYS={{ scan_relay_keep_days }}
+  no_log: true
+  tags: [scan_relay]
+
+- name: Install the upload script
+  ansible.builtin.copy:
+    src: scan-relay.sh
+    dest: /usr/local/bin/scan-relay
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [scan_relay]
+
+- name: Render the scan relay units
+  ansible.builtin.template:
+    src: "{{ item }}.j2"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - scan-relay.service
+    - scan-relay.timer
+  notify: Reload systemd
+  tags: [scan_relay]
+
+- name: Flush handlers so the timer starts against the current units
+  ansible.builtin.meta: flush_handlers
+  tags: [scan_relay]
+
+- name: Enable the scan relay timer
+  ansible.builtin.systemd_service:
+    name: scan-relay.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [scan_relay]

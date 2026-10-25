@@ -116,3 +116,24 @@
   when: paperless_info.container.State.Health.Status | default('') != 'healthy'
   tags:
     - paperless
+
+# Used by the scan relay on the Pi (roles/scan_relay). The token can add
+# documents and nothing else; uploads are owned by this user.
+- name: Ensure the scanner API user and token
+  community.docker.docker_container_exec:
+    container: paperless
+    argv:
+      - python3
+      - manage.py
+      - shell
+      - -c
+      - "{{ lookup('ansible.builtin.file', 'scanner_user.py') }}"
+    env:
+      SCANNER_USER: "{{ paperless_scanner_user }}"
+      SCANNER_TOKEN: "{{ paperless_scanner_token }}"
+  register: paperless_scanner
+  changed_when: (paperless_scanner.stdout_lines | last | default('')) == 'changed'
+  when: paperless_scanner_token | length > 0
+  no_log: true
+  tags:
+    - paperless

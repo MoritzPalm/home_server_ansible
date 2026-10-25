@@ -10,3 +10,7 @@ paperless_db_user: paperless
 # file. The bind-mounted directories must be owned by it.
 paperless_uid: "1000"
 paperless_gid: "1000"
+
+# API-only account for the scan relay. Empty token skips creating it.
+paperless_scanner_user: scanner
+paperless_scanner_token: ""

@@ -1,0 +1,11 @@
+# Managed by Ansible (roles/scan_relay) — edits on the host are overwritten.
+[Unit]
+Description=Upload finished scans to Paperless periodically
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec={{ scan_relay_interval }}
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

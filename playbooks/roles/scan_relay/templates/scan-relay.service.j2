@@ -1,0 +1,18 @@
+# Managed by Ansible (roles/scan_relay) — edits on the host are overwritten.
+[Unit]
+Description=Upload finished scans to Paperless
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User={{ scan_relay_user }}
+Group={{ scan_relay_user }}
+EnvironmentFile=/etc/scan-relay.env
+ExecStart=/usr/local/bin/scan-relay
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ scan_relay_root }}

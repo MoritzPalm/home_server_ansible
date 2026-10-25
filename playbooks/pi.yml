@@ -33,3 +33,4 @@
     - geerlingguy.docker
     - base
     - pi_monitor
+    - scan_relay

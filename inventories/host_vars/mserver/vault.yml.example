@@ -75,6 +75,9 @@ vault_paperless_postgres_password: "CHANGEME"
 vault_paperless_secret_key: "CHANGEME"
 # Consumed only on first start, to create the initial superuser.
 vault_paperless_admin_password: "CHANGEME"
+# API token of the scan relay's upload-only user. The same value goes into
+# host_vars/pimonitor/vault.yml. Generate with: openssl rand -hex 20
+vault_paperless_scanner_token: "CHANGEME"
 
 # --- backups ------------------------------------------------------------------
 # restic repository encryption. THE most important value here: without it the

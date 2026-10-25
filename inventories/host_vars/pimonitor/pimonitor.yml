@@ -80,3 +80,7 @@ pi_script:
   apt_packages:
     - nmap
   venv: "/home/moritzpalm/network_watcher/.venv"
+
+# --- scan relay ---------------------------------------------------------------
+scan_relay_smb_password: "{{ vault_scan_relay_smb_password | default('') }}"
+scan_relay_paperless_token: "{{ vault_paperless_scanner_token | default('') }}"

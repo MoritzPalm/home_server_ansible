@@ -1,0 +1,40 @@
+# Managed by Ansible (roles/scan_relay) — edits on the host are overwritten.
+
+[global]
+   server role = standalone server
+   workgroup = WORKGROUP
+   server string = scan inbox
+
+   bind interfaces only = yes
+   interfaces = lo {{ scan_relay_interfaces | join(' ') }}
+   hosts allow = 127.0.0.1 {{ scan_relay_lan_subnet }}
+   hosts deny = 0.0.0.0/0
+
+   # SMB1 is off. Scanners that only speak SMB1 need FTP instead.
+   server min protocol = SMB2_02
+   smb ports = 445
+   disable netbios = yes
+
+   map to guest = never
+   restrict anonymous = 2
+   usershare allow guests = no
+
+   load printers = no
+   printing = bsd
+   printcap name = /dev/null
+   disable spoolss = yes
+
+   logging = systemd
+   log level = 1
+
+[{{ scan_relay_share }}]
+   path = {{ scan_relay_inbox }}
+   valid users = {{ scan_relay_user }}
+   writeable = yes
+   browseable = yes
+   force user = {{ scan_relay_user }}
+   create mask = 0600
+   directory mask = 0700
+   # macOS and Windows metadata files would otherwise be uploaded as documents.
+   veto files = /._*/.DS_Store/Thumbs.db/desktop.ini/
+   delete veto files = yes

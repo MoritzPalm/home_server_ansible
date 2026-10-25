@@ -21,3 +21,10 @@ vault_uptime_kuma_admin_password: "CHANGEME"
 # Discord webhook the monitors notify. Kuma runs off-box deliberately, so this
 # still fires when mserver is down.
 vault_uptime_discord_webhook: "https://discord.com/api/webhooks/CHANGEME"
+
+# --- scan relay ---------------------------------------------------------------
+# Password the scanner uses for the SMB share. Scanner web UIs often cap the
+# length and reject some symbols, so check its limits before generating.
+vault_scan_relay_smb_password: "CHANGEME"
+# Same value as vault_paperless_scanner_token in host_vars/mserver/vault.yml.
+vault_paperless_scanner_token: "CHANGEME"
