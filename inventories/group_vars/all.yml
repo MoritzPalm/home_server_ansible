@@ -83,6 +83,9 @@ tunnel_hosts:
   cwa: "library.{{ public_domain }}"
   # Serves bookbridge's split kosync port only, never its dashboard.
   bookbridge: "kosync.{{ public_domain }}"
+  # Personal landing page on the apex; www is a 301 to it in Traefik.
+  website: "{{ public_domain }}"
+  website_www: "www.{{ public_domain }}"
 
 # Hostnames served on the websecure entrypoint only. *.{{ internal_domain }}
 # resolves to the tailnet address and :443 is not forwarded at the router, so
@@ -122,6 +125,8 @@ cloudflared_ingress_hosts:
   - "{{ tunnel_hosts.shelfarr }}"
   - "{{ tunnel_hosts.cwa }}"
   - "{{ tunnel_hosts.bookbridge }}"
+  - "{{ tunnel_hosts.website }}"
+  - "{{ tunnel_hosts.website_www }}"
 
 # Hosts protected by authentik forward-auth. Each gets an outpost callback
 # router generated in routers.yml. Only for apps with no login of their own;
