@@ -21,7 +21,6 @@ monitors:
   - { name: "Prometheus",       port: 9090,  path: "/-/healthy" }
   - { name: "Grafana",          port: 3000,  path: "/api/health" }
   - { name: "Alertmanager",     port: 9093,  path: "/-/healthy" }
-  - { name: "cAdvisor",         port: 8082,  path: "/healthz" }
   - { name: "node-exporter",    port: 9100,  path: "/" }
   - { name: "smartctl-exporter", port: 9902, path: "/" }
   - { name: "WUD",              port: 3001,  path: "/" }
@@ -63,6 +62,7 @@ monitors:
 # deleted, so dropping an entry above alone leaves it alerting as down.
 retired_monitors:
   - Portainer
+  - cAdvisor
 
 pi_wireguard_interface: "wg0"
 
