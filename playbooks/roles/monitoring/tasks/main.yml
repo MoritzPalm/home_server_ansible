@@ -212,6 +212,26 @@
   tags:
     - monitoring
 
+- name: Render containers dashboard
+  template:
+    src: grafana-containers-dashboard.json.j2
+    dest: "{{ config_path }}/grafana/provisioning/dashboards/containers.json"
+    owner: "472"
+    group: "472"
+    mode: "0644"
+  tags:
+    - monitoring
+
+- name: Render ingress dashboard
+  template:
+    src: grafana-ingress-dashboard.json.j2
+    dest: "{{ config_path }}/grafana/provisioning/dashboards/ingress.json"
+    owner: "472"
+    group: "472"
+    mode: "0644"
+  tags:
+    - monitoring
+
 # --- .env ---
 
 - name: Create .env file for monitoring stack

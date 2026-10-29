@@ -271,6 +271,18 @@ groups:
           summary: "Container health metrics are {{ $value | humanizeDuration }} old"
           description: "container-health-metrics.timer is not running or is failing; an unhealthy container would go unnoticed."
 
+      # A writable layer this large means an app is writing data inside the
+      # container instead of to a volume, and that data is lost on recreate.
+      # Typical layers here are under 50 MB.
+      - alert: ContainerWritableLayerLarge
+        expr: max by (name) (container_fs_usage_bytes{name!=""}) > 2 * 1024^3
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.name }} writable layer is {{ $value | humanize1024 }}B"
+          description: "Data written inside {{ $labels.name }} is not on a volume and disappears when the container is recreated. Find it with 'docker diff {{ $labels.name }}' and add a bind mount."
+
   - name: services
     interval: 60s
     rules:
@@ -284,6 +296,17 @@ groups:
         annotations:
           summary: "Scrape target {{ $labels.job }} is down"
           description: "Prometheus cannot reach {{ $labels.job }} ({{ $labels.instance }})."
+
+      # promtail stays up and scrapeable when docker discovery fails, it just
+      # tails nothing. One target per running container plus the traefik file.
+      - alert: PromtailMissingTargets
+        expr: promtail_targets_active_total < 0.5 * scalar(count(home_server_container_running == 1))
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "promtail tails only {{ $value }} log sources"
+          description: "Container logs are not reaching Loki. Check 'docker logs promtail' for docker discovery errors (often a 403 from monitoring_dockerproxy)."
 
       - alert: AlertmanagerNotificationsFailing
         expr: increase(alertmanager_notifications_failed_total[5m]) > 0
