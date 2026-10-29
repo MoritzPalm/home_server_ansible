@@ -73,7 +73,7 @@
     src: "{{ mergerfs.srcs | join(':') }}"
     fstype: "fuse.mergerfs"
     # include use_ino and reasonable defaults for media workflows
-    opts: "{{ mergerfs.opts | default('defaults,allow_other,use_ino,category.create=epmfs,minfreespace=50G,moveonenospc=true,dropcacheonclose=true,fsname=mergerfs') }}"
+    opts: "{{ mergerfs.opts | default('defaults,allow_other,use_ino,category.create=mfs,minfreespace=50G,moveonenospc=true,dropcacheonclose=true,fsname=mergerfs') }}"
     state: mounted
 
 - name: Verify pool is mounted
