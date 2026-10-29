@@ -29,3 +29,9 @@ scan_relay_smb_password: ""
 
 scan_relay_paperless_url: "https://{{ internal_hosts.paperless }}"
 scan_relay_paperless_token: ""
+
+# Push monitor in the Uptime Kuma on this host. It goes down, and notifies,
+# when no clean run has pushed for this long. Empty push URL disables pushing.
+scan_relay_kuma_monitor: "Scan relay"
+scan_relay_push_grace_seconds: 300
+scan_relay_push_url: ""

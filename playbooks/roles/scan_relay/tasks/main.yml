@@ -94,6 +94,14 @@
     comment: "SMB scan inbox"
   tags: [scan_relay, firewall]
 
+- name: Set up the scan relay push monitor
+  ansible.builtin.include_tasks:
+    file: kuma_push.yml
+    apply:
+      tags: [scan_relay]
+  when: configure_kuma_monitors | default(true)
+  tags: [scan_relay]
+
 - name: Write the scan relay environment file
   ansible.builtin.copy:
     dest: /etc/scan-relay.env
@@ -108,6 +116,7 @@
       SCAN_RELAY_FAILED={{ scan_relay_failed }}
       SCAN_RELAY_MIN_AGE={{ scan_relay_min_age_seconds }}
       SCAN_RELAY_KEEP_DAYS={{ scan_relay_keep_days }}
+      SCAN_RELAY_PUSH_URL={{ scan_relay_push_url }}
   no_log: true
   tags: [scan_relay]
 

@@ -9,6 +9,10 @@
 #   anything else (network, 401/403, 429, 5xx)  left in the inbox for the next run
 #
 # Exits non-zero when any file is left behind, so the unit shows as failed.
+#
+# With SCAN_RELAY_PUSH_URL set, a clean run with an empty failed/ pushes "up"
+# to an Uptime Kuma push monitor. Anything else skips the push, and Kuma alerts
+# once no push has arrived within the monitor's interval.
 
 set -uo pipefail
 
@@ -18,6 +22,8 @@ sent=${SCAN_RELAY_SENT:?}
 failed=${SCAN_RELAY_FAILED:?}
 min_age=${SCAN_RELAY_MIN_AGE:-60}
 keep_days=${SCAN_RELAY_KEEP_DAYS:-7}
+push_url=${SCAN_RELAY_PUSH_URL:-}
+uploaded=0
 
 endpoint="${PAPERLESS_URL%/}/api/documents/post_document/"
 response=$(mktemp)
@@ -51,6 +57,7 @@ while IFS= read -r -d '' file; do
         rm -f -- "$file"
       fi
       echo "uploaded ${name}"
+      uploaded=$((uploaded + 1))
       ;;
     400|413|415)
       archive "$file" "$failed"
@@ -70,6 +77,18 @@ find "$inbox" -mindepth 1 -type d -empty ! -newermt "${min_age} seconds ago" -de
 
 if (( keep_days > 0 )); then
   find "$sent" -mindepth 1 -type f -mtime "+${keep_days}" -delete
+fi
+
+if [[ -n $push_url ]]; then
+  rejected=$(find "$failed" -mindepth 1 -type f | wc -l)
+  if (( status == 0 && rejected == 0 )); then
+    curl --silent --show-error --max-time 10 --get --output /dev/null \
+      --data-urlencode "status=up" \
+      --data-urlencode "msg=ok, ${uploaded} uploaded" \
+      "$push_url" || echo "push to uptime kuma failed" >&2
+  elif (( rejected > 0 )); then
+    echo "${rejected} rejected file(s) in ${failed}, not reporting healthy" >&2
+  fi
 fi
 
 exit "$status"

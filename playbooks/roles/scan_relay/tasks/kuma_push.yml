@@ -1,0 +1,52 @@
+---
+# A Kuma push monitor for the relay. The relay pushes only after a clean run
+# with an empty failed/ directory, so failing uploads, a stopped timer and
+# rejected files all show up as missed pushes. Lives here rather than in
+# pi_monitor so that `--tags scan_relay` can create the monitor and write its
+# push URL in one run.
+- name: Manage the scan relay push monitor from the controller
+  delegate_to: localhost
+  become: false
+  vars:
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+    scan_relay_kuma_url: "http://{{ ansible_host }}:{{ uptime_kuma_port }}"
+  block:
+    - name: Log in to Uptime Kuma
+      lucasheld.uptime_kuma.login:
+        api_url: "{{ scan_relay_kuma_url }}"
+        api_timeout: "{{ kuma_api_timeout_seconds | default(60) }}"
+        api_username: "{{ uptime_kuma_admin_user }}"
+        api_password: "{{ uptime_kuma_admin_password }}"
+      register: scan_relay_kuma_login
+      no_log: true
+
+    # The library generates the push token on creation and never returns it,
+    # hence the lookup below.
+    - name: Ensure the scan relay push monitor exists
+      lucasheld.uptime_kuma.monitor:
+        api_url: "{{ scan_relay_kuma_url }}"
+        api_timeout: "{{ kuma_api_timeout_seconds | default(60) }}"
+        api_token: "{{ scan_relay_kuma_login.token }}"
+        name: "{{ scan_relay_kuma_monitor }}"
+        type: push
+        interval: "{{ scan_relay_push_grace_seconds }}"
+        maxretries: 0
+        notification_names:
+          - Discord
+        state: present
+      no_log: true
+
+    - name: Look up the push token
+      lucasheld.uptime_kuma.monitor_info:
+        api_url: "{{ scan_relay_kuma_url }}"
+        api_timeout: "{{ kuma_api_timeout_seconds | default(60) }}"
+        api_token: "{{ scan_relay_kuma_login.token }}"
+        name: "{{ scan_relay_kuma_monitor }}"
+      register: scan_relay_kuma_monitor_info
+      no_log: true
+
+    - name: Set the push URL
+      ansible.builtin.set_fact:
+        scan_relay_push_url: >-
+          {{ scan_relay_kuma_url }}/api/push/{{ scan_relay_kuma_monitor_info.monitors[0].pushToken }}
+      no_log: true
