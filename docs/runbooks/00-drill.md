@@ -48,11 +48,15 @@ right trade against egress time.
 sudo restic-repo local snapshots
 sudo restic-repo local ls latest | grep -E 'sonarr\.db|radarr\.db|Preferences\.xml'
 sudo restic-repo local ls latest | grep -c 'Plex Media Server/Media'   # expect 0
+sudo restic-repo local ls latest | grep -E 'recipes/mediafiles/|vikunja-files|soulsync/.encryption_key|grafana.db$' | head
+sudo restic-repo local ls latest | grep -c 'soulsync/music_library.db'   # expect 0
 ```
 
-The last one matters: if the exclusions stopped working, the repository is
+The Plex line matters: if the exclusions stopped working, the repository is
 quietly storing tens of GB of regenerable artwork and the cost has grown for
-nothing.
+nothing. The next two cover the paths added on 2026-10-29 after they were found
+missing — state outside `/srv/data/configs` is easy to lose from `backup_paths`
+again.
 
 ## 4. Restore something and open it
 
@@ -71,7 +75,20 @@ SQL and not a zero-byte file from a failed `pg_dump`.
 
 Do this from your **laptop**, not mserver, using the credentials from your
 password manager rather than the vault — this is what tests
-[99-secrets-escrow](99-secrets-escrow.md):
+[99-secrets-escrow](99-secrets-escrow.md).
+
+Prerequisites, none of which were in place as of 2026-10-29, which is why this
+step had never run:
+
+- `brew install restic`. `restic mount` additionally needs macFUSE; without it,
+  use `restic restore --include <path> --target /tmp/browse` instead.
+- A Storage Box **sub-account marked read-only** for drills, with the laptop's
+  own key registered on it and its details in the password manager. A read-only
+  account cannot `forget` or `prune`, so a drill — or a stolen laptop — cannot
+  damage the production snapshots. The full-access credentials are for a real
+  recovery only.
+- A `Host` entry for the Storage Box in `~/.ssh/config`, so restic's sftp
+  backend finds the key.
 
 ```bash
 export RESTIC_REPOSITORY='sftp:uXXXXXX@uXXXXXX.your-storagebox.de:/backup'

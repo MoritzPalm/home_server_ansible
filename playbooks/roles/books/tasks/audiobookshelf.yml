@@ -75,6 +75,43 @@
     audiobookshelf_user_id: "{{ audiobookshelf_login.json.user.id }}"
   no_log: true
 
+# The login response carries the current server settings, so no extra request is
+# needed to know whether anything has to change. backupPath is not patchable over
+# the API and stays at /metadata/backups.
+- name: Enable audiobookshelf scheduled backups
+  vars:
+    abs_settings: "{{ audiobookshelf_login.json.serverSettings | default({}) }}"
+  when: >
+    (abs_settings.backupSchedule | default(false)) != audiobookshelf_backup_schedule
+    or (abs_settings.backupsToKeep | default(0) | int) != (audiobookshelf_backups_to_keep | int)
+    or (abs_settings.maxBackupSize | default(-1) | float) != (audiobookshelf_max_backup_size_gb | float)
+  uri:
+    url: "http://{{ ansible_host }}:13378/api/settings"
+    method: PATCH
+    headers:
+      Authorization: "Bearer {{ audiobookshelf_token }}"
+    body_format: json
+    body:
+      backupSchedule: "{{ audiobookshelf_backup_schedule }}"
+      backupsToKeep: "{{ audiobookshelf_backups_to_keep | int }}"
+      maxBackupSize: "{{ audiobookshelf_max_backup_size_gb | int }}"
+    return_content: true
+  register: audiobookshelf_settings_update
+  changed_when: true
+  no_log: true
+
+# The server silently drops keys it does not know, so a renamed setting would
+# otherwise look like success.
+- name: Ensure the backup schedule was applied
+  when: audiobookshelf_settings_update is not skipped
+  assert:
+    that:
+      - audiobookshelf_settings_update.json.serverSettings.backupSchedule == audiobookshelf_backup_schedule
+    fail_msg: >-
+      PATCH /api/settings returned without backupSchedule set to
+      '{{ audiobookshelf_backup_schedule }}'. Check the setting names against the
+      running audiobookshelf version.
+
 - name: Get audiobookshelf libraries
   uri:
     url: "http://{{ ansible_host }}:13378/api/libraries"

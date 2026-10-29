@@ -2,6 +2,18 @@
 audiobookshelf_library_name: Audiobooks
 kavita_library_name: Books
 
+# Audiobookshelf's own scheduled backups: a zip of its database and item
+# metadata under /metadata/backups, which is the absdata bind mount restic
+# snapshots. Off by default in the image; without it restic copies a live SQLite
+# file with no consistent copy to fall back on, unlike the arr apps and kavita,
+# which all keep nightly zips. Cron in the container's timezone; 01:30 is before
+# the 02:30 restic run, so each snapshot carries that night's zip. The size cap
+# is in GB and is enforced by refusing the backup, so keep it above the real
+# size (a few MB today).
+audiobookshelf_backup_schedule: "30 1 * * *"
+audiobookshelf_backups_to_keep: 2
+audiobookshelf_max_backup_size_gb: 1
+
 # Where the audiobookshelf API key for bookbridge is kept. Audiobookshelf returns
 # a key's value only at creation, so it is written here rather than re-fetched.
 # Under config_path, so restic backs it up alongside everything else it belongs

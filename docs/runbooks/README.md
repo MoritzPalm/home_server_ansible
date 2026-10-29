@@ -39,3 +39,20 @@ repository covers losing the pool.
 force-cloned by the `docker` role. Any recovery that involves changed compose
 files must commit and push first, and must include the `docker` tag in the
 playbook run.
+
+## What is deliberately not backed up
+
+Everything meant to survive must appear in `backup_paths`, `backup_databases`
+or `backup_bulk_paths` in `roles/backup/defaults/main.yml`. A new stack whose
+state lives outside `/srv/data/configs` needs an entry there, or it is in this
+table by accident.
+
+| | Why | After a loss |
+|---|---|---|
+| Films, TV, music, books under `/mnt/storage/media` | Reacquirable, and most of the pool | The *arr history and indexers are in the config snapshot; re-add from there |
+| Postgres data directories under `/srv/data/db` | A file copy of a running cluster is not reliably restorable | `pg_dump` output is in every `automated` snapshot — [02-database-restore](02-database-restore.md) |
+| Prometheus and Loki data | Metrics and logs, 15-day retention | Start empty |
+| soulsync's `music_library.db` | 1.5 GB scan of the music library, rewritten nightly | Rescan from its UI; its encryption key and listening history *are* backed up |
+| Grafana plugins | Re-downloaded at start | — |
+| `/srv/compose` and every `.env` | Regenerated from GitHub and the vault | `ansible-playbook playbooks/site.yml` |
+| Uptime Kuma on the Pi (`/srv/data/db/uptime-kuma`) | On the Pi, where the backup role does not run | Monitors and the Discord route are recreated by `pi.yml`; uptime history is lost |

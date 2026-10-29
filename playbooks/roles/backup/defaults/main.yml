@@ -67,11 +67,27 @@ backup_databases:
 # history, requests, seeding state. Restoring only the allowlist gives a working
 # server, not this server.
 #
-# /srv/data/db is deliberately absent — those databases are dumped with pg_dump
-# instead. A file-level copy of a running Postgres data directory is not
-# reliably restorable.
+# The Postgres data directories under /srv/data/db are deliberately absent —
+# those databases are dumped with pg_dump instead. A file-level copy of a running
+# Postgres data directory is not reliably restorable. The non-Postgres state that
+# shares that directory is listed individually below.
 backup_paths:
   - "{{ config_path }}"
+
+  # Application files outside the configuration tree. Small, and as
+  # irreplaceable as the SQLite databases above. Found missing 2026-10-29 while
+  # planning the first restore drill: a restored Tandoor had every recipe and no
+  # pictures.
+  - "{{ media_path }}/recipes/mediafiles"   # tandoor recipe images
+  - "{{ database_dir }}/vikunja-files"      # vikunja task attachments
+
+  # soulsync: the key that encrypts its stored credentials, and the listening
+  # history. Its music_library.db is excluded below.
+  - "{{ database_dir }}/soulsync"
+
+  # Dashboards and datasources are provisioned from this repository, but UI
+  # edits, users and preferences exist only in this file. 7 MB.
+  - "{{ database_dir }}/grafana/grafana.db"
 
 # The rule: keep state, drop whatever the application regenerates.
 #
@@ -114,3 +130,10 @@ backup_excludes:
   # transfers.db (40 MB) are kept — those are transfer history.
   - "{{ config_path }}/slskd/incomplete"
   - "{{ config_path }}/slskd/data/search.db"
+
+  # soulsync's scans of the music and video libraries, plus the dated copies it
+  # makes of them itself: 1.5 GB each, rewritten nightly, rebuilt by a rescan
+  # from its UI. The glob also catches the *.backup_* and *.broken_* siblings.
+  - "{{ database_dir }}/soulsync/music_library.db*"
+  - "{{ database_dir }}/soulsync/video_library.db*"
+  - "**/__pycache__"

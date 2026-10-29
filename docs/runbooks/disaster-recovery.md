@@ -66,6 +66,12 @@ restic restore latest --target /tmp/restore \
 
 ## 2. Timings, so expectations are right
 
+Measured 2026-10-29: the off-site repository holds about **46 GB of photos, 5 MB
+of Paperless media and 6 GB of configuration** after excludes. At that size a
+complete restore is roughly an hour at 100 Mbit and under half an hour at 250.
+Re-measure during each drill and update this paragraph; the table below is for
+when the libraries have grown.
+
 Hetzner does not throttle and charges nothing for traffic, so this is bounded by
 your own downlink:
 
