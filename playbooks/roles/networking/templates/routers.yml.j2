@@ -42,6 +42,16 @@ http:
       middlewares:
         - chain-public@file
 
+    # Uptime Kuma runs on the Pi, so it cannot carry docker labels here;
+    # Traefik dials it over the tailnet instead.
+    uptime-kuma:
+      rule: "Host(`kuma.{{ internal_domain }}`)"
+      entryPoints:
+        - websecure
+      service: uptime-kuma@file
+      middlewares:
+        - chain-public@file
+
 {% for host in authentik_forward_auth_hosts | default([]) %}
     # authentik's embedded outpost handles the login redirect and callback for
     # {{ host }}. This must be a separate router: the path has to reach
@@ -62,3 +72,8 @@ http:
       loadBalancer:
         servers:
           - url: "http://authentik_server:9000"
+
+    uptime-kuma:
+      loadBalancer:
+        servers:
+          - url: "http://{{ hostvars['pimonitor'].ansible_host }}:{{ hostvars['pimonitor'].uptime_kuma_port }}"

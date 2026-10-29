@@ -74,6 +74,7 @@
     content: |
       HOST_IP={{ host_ip }}
       LAN_IP={{ lan_ip }}
+      INTERNAL_DOMAIN={{ internal_domain }}
       HOST_IMMICH={{ tunnel_hosts.immich }}
       PLEX_CLAIM={{ plex_claim }}
       MEDIA_PATH={{ media_path }}

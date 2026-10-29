@@ -222,6 +222,7 @@
     mode: "0640"
     content: |
       HOST_IP={{ host_ip }}
+      INTERNAL_DOMAIN={{ internal_domain }}
       CONFIG_PATH={{ config_path }}
       DATABASE_DIR={{ database_dir }}
       # promtail mounts LOG_DIR/traefik to read the access log

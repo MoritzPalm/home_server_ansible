@@ -26,6 +26,11 @@
           bypass_local_auth: true
           bypass_auth_subnet_whitelist_enabled: true
           bypass_auth_subnet_whitelist: "172.16.0.0/12\n192.168.0.0/20"
+          # Requests via traefik arrive from a docker address, which the whitelist
+          # above would wave through without a login. Trusting the docker range as
+          # a proxy makes qBittorrent take the client from X-Forwarded-For instead.
+          web_ui_reverse_proxy_enabled: true
+          web_ui_reverse_proxies_list: "172.16.0.0/12"
           max_ratio_enabled: false
           max_seeding_time_enabled: false
           max_inactive_seeding_time_enabled: false
