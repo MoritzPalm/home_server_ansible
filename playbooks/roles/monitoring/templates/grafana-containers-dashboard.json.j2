@@ -281,14 +281,14 @@
         "uid": "prometheus"
       },
       "type": "stat",
-      "title": "Restarts / recreates (24h)",
+      "title": "Restarts (24h)",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "sum((sum by (name) (changes(container_start_time_seconds{name=~\".+\"}[24h])) + count by (name) (max_over_time(container_start_time_seconds{name=~\".+\"}[24h])) - 1)) or vector(0)",
+          "expr": "sum(sum by (name) (increase(home_server_container_restarts_total{name=~\".+\"}[24h]))) or vector(0)",
           "refId": "A",
           "instant": true,
           "range": false
@@ -336,7 +336,7 @@
           "values": false
         }
       },
-      "description": "Includes recreates from deploys and image updates.",
+      "description": "Restarts by docker's restart policy. Deploys recreate containers and are not counted.",
       "id": 5,
       "gridPos": {
         "h": 4,
@@ -460,7 +460,7 @@
             "type": "prometheus",
             "uid": "prometheus"
           },
-          "expr": "(sum by (name) (changes(container_start_time_seconds{name=~\"$container\"}[24h])) + count by (name) (max_over_time(container_start_time_seconds{name=~\"$container\"}[24h])) - 1)",
+          "expr": "sum by (name) (increase(home_server_container_restarts_total{name=~\"$container\"}[24h]))",
           "refId": "E",
           "instant": true,
           "range": false,

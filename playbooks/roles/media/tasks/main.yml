@@ -73,6 +73,7 @@
     mode: "0640"
     content: |
       HOST_IP={{ host_ip }}
+      INTERNAL_DOMAIN={{ internal_domain }}
       LAN_IP={{ lan_ip }}
       HOST_IMMICH={{ tunnel_hosts.immich }}
       PLEX_CLAIM={{ plex_claim }}

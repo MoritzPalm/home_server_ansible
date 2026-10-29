@@ -16,20 +16,25 @@ emit() {
 # TYPE home_server_container_running gauge
 # HELP home_server_container_health Docker healthcheck verdict: 1 healthy, 0 unhealthy, -1 starting. Absent for containers that define no healthcheck.
 # TYPE home_server_container_health gauge
+# HELP home_server_container_restarts_total Restarts by docker's restart policy since the container was created.
+# TYPE home_server_container_restarts_total counter
 EOF
 
   # One inspect for all containers rather than one per name: this runs every
   # minute and the daemon round-trip is the expensive part.
   docker ps --all --quiet \
     | xargs --no-run-if-empty docker inspect \
-        --format '{% raw %}{{.Name}} {{.State.Status}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}{% endraw %}' \
-    | while read -r name state health; do
+        --format '{% raw %}{{.Name}} {{.State.Status}} {{.RestartCount}} {{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}{% endraw %}' \
+    | while read -r name state restarts health; do
         name=${name#/}
         if [ "$state" = "running" ]; then
           echo "home_server_container_running{name=\"${name}\"} 1"
         else
           echo "home_server_container_running{name=\"${name}\"} 0"
         fi
+        # cAdvisor cannot count these: a restart keeps the container ID, the
+        # cgroup and the creation time, so its series never changes.
+        echo "home_server_container_restarts_total{name=\"${name}\"} ${restarts}"
         case "$health" in
           healthy)   echo "home_server_container_health{name=\"${name}\"} 1" ;;
           unhealthy) echo "home_server_container_health{name=\"${name}\"} 0" ;;

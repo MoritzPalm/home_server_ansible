@@ -125,14 +125,34 @@ groups:
           summary: "SSD (configs/db) low ({{ $value | printf \"%.1f\" }}% free)"
           description: "Root filesystem (configs, databases, logs) has less than 20% free. Backups or logs may be growing."
 
+      # smartctl-exporter renamed smartctl_device_smart_healthy; the old name
+      # matched nothing, so this rule could never fire.
       - alert: SmartDiskUnhealthy
-        expr: smartctl_device_smart_healthy == 0
+        expr: smartctl_device_smart_status == 0
         for: 5m
         labels:
           severity: critical
         annotations:
           summary: "Disk {{ $labels.device }} SMART unhealthy"
-          description: "SMART reports {{ $labels.device }} ({{ $labels.model_name }}) is not healthy."
+          description: "SMART reports {{ $labels.device }} as failing. Check 'smartctl -a /dev/{{ $labels.device }}' and plan a replacement."
+
+      # The overall SMART verdict usually flips only once a disk is already
+      # failing. Pending and uncorrectable sectors are the early signs; a
+      # reallocated count that grows means the disk is still deteriorating,
+      # whereas a stable one has been handled.
+      - alert: SmartDiskDegrading
+        expr: >
+          max by (device, attribute_name) (smartctl_device_attribute{attribute_value_type="raw",
+            attribute_name=~"Current_Pending_Sector|Offline_Uncorrectable|Reported_Uncorrect"}) > 0
+          or
+          max by (device, attribute_name) (increase(smartctl_device_attribute{attribute_value_type="raw",
+            attribute_name="Reallocated_Sector_Ct"}[24h])) > 0
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk {{ $labels.device }} {{ $labels.attribute_name }} is {{ $value }}"
+          description: "{{ $labels.device }} is developing bad sectors. Make sure its data is in the offsite backup and plan a replacement."
 
       - alert: SmartDiskHighTemp
         expr: smartctl_device_temperature{temperature_type="current"} > 55
@@ -143,8 +163,9 @@ groups:
           summary: "Disk {{ $labels.device }} hot ({{ $value }}°C)"
           description: "Disk {{ $labels.device }} has been above 55°C for 10 minutes."
 
+      # or vector(0): with both disks gone, count() returns nothing rather than 0
       - alert: MergerfsPoolDegraded
-        expr: count(node_filesystem_size_bytes{mountpoint=~"/mnt/hdd[0-9]+"}) < 2
+        expr: (count(node_filesystem_size_bytes{mountpoint=~"/mnt/hdd[0-9]+"}) or vector(0)) < 2
         for: 5m
         labels:
           severity: critical
@@ -189,9 +210,10 @@ groups:
           description: "cAdvisor is up but sees no docker containers, so OOM, restart-loop and resource alerts cannot fire. Check that it reaches the docker API through dockerproxy."
 
       # value is normalised to the whole host (100% = all cores), otherwise a
-      # single transcode or ML job crossing one core would page constantly
+      # single transcode or ML job crossing one core would page constantly.
+      # sum by name: a recreate briefly leaves the old series alongside the new.
       - alert: ContainerHighCpu
-        expr: rate(container_cpu_usage_seconds_total{name!="", name!~".*POD.*"}[5m]) / scalar(machine_cpu_cores) * 100 > 80
+        expr: sum by (name) (rate(container_cpu_usage_seconds_total{name!="", name!~".*POD.*"}[5m])) / scalar(machine_cpu_cores) * 100 > 80
         for: 15m
         labels:
           severity: warning
@@ -203,9 +225,13 @@ groups:
       # usage/0 = +Inf in PromQL — the (limit > 0) filter drops those series
       # instead of firing for every single container. Dormant until containers
       # get mem_limit set.
+      #
+      # working_set rather than usage: usage includes page cache the kernel
+      # reclaims under pressure, so media and database containers read high
+      # while being nowhere near an OOM kill.
       - alert: ContainerHighMemory
         expr: >
-          (container_memory_usage_bytes{name!="", name!~".*POD.*"}
+          (container_memory_working_set_bytes{name!="", name!~".*POD.*"}
           / (container_spec_memory_limit_bytes{name!="", name!~".*POD.*"} > 0)) * 100 > 90
         for: 5m
         labels:
@@ -217,7 +243,7 @@ groups:
       # catches runaway containers on a host where nothing has a memory limit
       - alert: ContainerHighHostMemory
         expr: >
-          (container_memory_usage_bytes{name!="", name!~".*POD.*"}
+          (sum by (name) (container_memory_working_set_bytes{name!="", name!~".*POD.*"})
           / on() group_left() machine_memory_bytes) * 100 > 30
         for: 15m
         labels:
@@ -234,18 +260,17 @@ groups:
           summary: "Container {{ $labels.name }} OOM killed"
           description: "Container {{ $labels.name }} was killed by the OOM killer."
 
-      # each restart produces a NEW series (cAdvisor re-registers the container),
-      # so changes() on one series never counts restarts. Instead, count live
-      # series generations per container name: during a crash loop several
-      # generations coexist within Prometheus' 5m staleness window.
+      # Reads docker's RestartCount from the container-health textfile. cAdvisor
+      # cannot see a crash loop: a restart keeps the container ID and cgroup,
+      # and container_start_time_seconds is the creation time, so the series
+      # never changes. Recreates (deploys) reset the count and do not fire.
       - alert: ContainerRestartLoop
-        expr: count by (name) (container_start_time_seconds{name!="", name!~".*POD.*"}) > 2
-        for: 5m
+        expr: increase(home_server_container_restarts_total[15m]) >= 3
         labels:
           severity: warning
         annotations:
           summary: "Container {{ $labels.name }} restart looping"
-          description: "Container {{ $labels.name }} has restarted repeatedly in the last few minutes."
+          description: "Container {{ $labels.name }} restarted {{ $value | printf \"%.0f\" }} times in 15 minutes. Check 'docker logs {{ $labels.name }}'."
 
       # cAdvisor exposes resource usage but no healthcheck verdict, so a
       # container that keeps running while its healthcheck fails is invisible
@@ -298,15 +323,20 @@ groups:
           description: "Prometheus cannot reach {{ $labels.job }} ({{ $labels.instance }})."
 
       # promtail stays up and scrapeable when docker discovery fails, it just
-      # tails nothing. One target per running container plus the traefik file.
-      - alert: PromtailMissingTargets
-        expr: promtail_targets_active_total < 0.5 * scalar(count(home_server_container_running == 1))
+      # ships nothing; the traefik access-log file keeps Loki looking busy.
+      # promtail_targets_active_total counts only file targets, so watch the
+      # docker entry counter instead. or vector(0): it is absent until the
+      # first docker entry after a restart.
+      - alert: PromtailNoContainerLogs
+        expr: >
+          (sum(rate(promtail_docker_target_entries_total[15m])) or on() vector(0)) == 0
+          and on() (up{job="promtail"} == 1)
         for: 15m
         labels:
           severity: warning
         annotations:
-          summary: "promtail tails only {{ $value }} log sources"
-          description: "Container logs are not reaching Loki. Check 'docker logs promtail' for docker discovery errors (often a 403 from monitoring_dockerproxy)."
+          summary: "No container logs are reaching Loki"
+          description: "promtail is running but has shipped no docker log lines for 30 minutes. Check 'docker logs promtail' for docker discovery errors (often a 403 from monitoring_dockerproxy)."
 
       - alert: AlertmanagerNotificationsFailing
         expr: increase(alertmanager_notifications_failed_total[5m]) > 0
@@ -391,12 +421,14 @@ groups:
           summary: "TLS cert for {{ $labels.cn }} expires in {{ $value | printf \"%.0f\" }} days"
           description: "Renewal is overdue. Beware the Let's Encrypt limit of 5 failed authorizations per hostname per hour when retrying."
 
-      # Ratio rather than an absolute rate, so a quiet server does not alert on
-      # a couple of stray 5xx and a busy one is not held to the same count.
+      # Ratio rather than an absolute rate, so a busy server is not held to the
+      # same count as a quiet one. The volume floor keeps a quiet hour (about
+      # 0.3 req/s here) from alerting on two stray 5xx out of a dozen requests.
       - alert: TraefikHigh5xxRate
         expr: |
           sum(rate(traefik_service_requests_total{code=~"5.."}[5m]))
             / sum(rate(traefik_service_requests_total[5m])) > 0.05
+          and on() sum(increase(traefik_service_requests_total[5m])) > 50
         for: 10m
         labels:
           severity: warning

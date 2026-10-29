@@ -41,6 +41,7 @@
     mode: "0640"
     content: |
       HOST_IP={{ host_ip }}
+      INTERNAL_DOMAIN={{ internal_domain }}
       HOST_AUDIOBOOKSHELF={{ tunnel_hosts.audiobookshelf }}
       HOST_KAVITA={{ tunnel_hosts.kavita }}
       HOST_BOOKBRIDGE={{ tunnel_hosts.bookbridge }}
