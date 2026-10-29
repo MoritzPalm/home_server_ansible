@@ -2,9 +2,10 @@
 # tandoor container; never written to disk on the host.
 #
 # Seeds a space with Tandoor's open data (units, supermarket categories,
-# nutrition property types, stores, foods, unit conversions) and with the
-# import automations below. Safe to re-run: existing objects are matched by
-# open-data slug or name and left alone, so hand edits in the UI survive.
+# nutrition property types, stores, foods, unit conversions), a few extra
+# units, and the import rules below. Safe to re-run: existing objects are
+# matched by open-data slug or name and left alone, so hand edits in the UI
+# survive.
 #
 # The last line of output is `TANDOOR_BOOTSTRAP_RESULT {json}`; the task reads
 # `changed` from it.
@@ -17,37 +18,430 @@ from django_scopes import scope, scopes_disabled
 
 from cookbook.helper.HelperFunctions import safe_request
 from cookbook.helper.open_data_importer import OpenDataImporter
-from cookbook.models import Automation, Space
+from cookbook.models import Automation, Food, Space, Unit
 
 OPEN_DATA_VERSION = {{ tandoor_open_data_version | default('de') | to_json }}
 OPEN_DATA_URL = 'https://raw.githubusercontent.com/TandoorRecipes/open-tandoor-data/main/build/{}.json'
 SPACE_NAME = {{ tandoor_bootstrap_space | default('') | to_json }}
 
-# UNIT_ALIAS matches the whole parsed unit case-insensitively and renames it to
-# a unit the open data already defines, so imported recipes do not each create
-# their own "Esslöffel", "EL." and "Eßl.".
-AUTOMATIONS = json.loads({{ tandoor_automations | default([
-    {'type': 'UNIT_ALIAS', 'param_1': 'Esslöffel', 'param_2': 'EL'},
-    {'type': 'UNIT_ALIAS', 'param_1': 'Eßlöffel', 'param_2': 'EL'},
-    {'type': 'UNIT_ALIAS', 'param_1': 'EL.', 'param_2': 'EL'},
-    {'type': 'UNIT_ALIAS', 'param_1': 'Teelöffel', 'param_2': 'TL'},
-    {'type': 'UNIT_ALIAS', 'param_1': 'TL.', 'param_2': 'TL'},
-    {'type': 'UNIT_ALIAS', 'param_1': 'Gramm', 'param_2': 'g'},
-    {'type': 'UNIT_ALIAS', 'param_1': 'gr', 'param_2': 'g'},
-    {'type': 'UNIT_ALIAS', 'param_1': 'gr.', 'param_2': 'g'},
-    {'type': 'UNIT_ALIAS', 'param_1': 'Kilogramm', 'param_2': 'kg'},
-    {'type': 'UNIT_ALIAS', 'param_1': 'Milliliter', 'param_2': 'ml'},
-    {'type': 'UNIT_ALIAS', 'param_1': 'Liter', 'param_2': 'l'},
-    {'type': 'UNIT_ALIAS', 'param_1': 'Stk', 'param_2': 'Stück'},
-    {'type': 'UNIT_ALIAS', 'param_1': 'Stk.', 'param_2': 'Stück'},
-    {'type': 'UNIT_ALIAS', 'param_1': 'Prisen', 'param_2': 'Prise'},
-    {'type': 'UNIT_ALIAS', 'param_1': 'Dosen', 'param_2': 'Dose'},
-    {'type': 'UNIT_ALIAS', 'param_1': 'Flaschen', 'param_2': 'Flasche'},
-]) | to_json | to_json }})
+# Rules from the inventory, appended to the generated ones. Same shape:
+# {'type': 'FOOD_ALIAS', 'param_1': 'shrimp', 'param_2': 'Garnelen'}.
+EXTRA_AUTOMATIONS = json.loads({{ tandoor_extra_automations | default([]) | to_json | to_json }})
 
 # Order matters: foods reference units, categories and property types by slug,
 # and conversions reference foods and units.
 DATATYPES = ['unit', 'category', 'property', 'store', 'food', 'conversion']
+
+# ---------------------------------------------------------------------------
+# Import rules
+#
+# Tandoor's ingredient parser takes the token after the amount as the unit and
+# the rest as the food, then looks both up in the space by exact, case-sensitive
+# name. A miss creates a new food or unit with no nutrition, no supermarket
+# category and no base unit, so nothing downstream (nutrition, shopping list
+# order, prices, the planner) can use it. The rules here run before that lookup
+# and match case-insensitively. They translate English ingredient lines onto
+# the German open-data names, absorb spelling variants, and keep adjectives
+# out of the unit slot.
+# ---------------------------------------------------------------------------
+
+# Countable units the open data does not ship. No base unit, so they take no
+# part in conversions; the plural is what the shopping list shows.
+EXTRA_UNITS = [
+    ('Zehe', 'Zehen'),
+    ('Bund', 'Bund'),
+    ('Scheibe', 'Scheiben'),
+    ('Packung', 'Packungen'),
+]
+
+# UNIT_ALIAS: whole parsed unit -> existing unit name.
+UNIT_ALIASES = {
+    'EL': ['Esslöffel', 'Eßlöffel', 'EL.', 'Essl.', 'tbsp', 'tbsps', 'tbsp.', 'tbs', 'tablespoon', 'tablespoons'],
+    'TL': ['Teelöffel', 'TL.', 'tsp', 'tsps', 'tsp.', 'teaspoon', 'teaspoons'],
+    'Cup': ['cup', 'cups'],
+    'g': ['Gramm', 'gr', 'gr.', 'gram', 'grams'],
+    'kg': ['Kilogramm', 'kilogram', 'kilograms', 'kilo', 'kilos'],
+    'ml': ['Milliliter', 'milliliter', 'milliliters', 'millilitre', 'millilitres'],
+    'l': ['Liter', 'liter', 'liters', 'litre', 'litres'],
+    'oz': ['ounce', 'ounces', 'oz.'],
+    'lb': ['lbs', 'pound', 'pounds', 'Pfund'],
+    'Stück': ['Stk', 'Stk.', 'St.', 'piece', 'pieces', 'pcs', 'pc'],
+    'Prise': ['Prisen', 'pinch', 'pinches', 'dash', 'dashes'],
+    'Dose': ['Dosen', 'can', 'cans', 'tin', 'tins'],
+    'Flasche': ['Flaschen', 'bottle', 'bottles'],
+    'Zehe': ['Zehen', 'clove', 'cloves'],
+    'Bund': ['bunch', 'bunches'],
+    'Scheibe': ['Scheiben', 'slice', 'slices'],
+    'Packung': ['Packungen', 'Pck.', 'Pkg.', 'pack', 'packs', 'package', 'packages', 'packet', 'packets'],
+}
+
+# Words that land in the unit slot because they sit between the amount and the
+# food ("2 large eggs", "3 ripe bananas", "2 große Zwiebeln"). Treating them as
+# Stück keeps the amount countable and lets the food alias see a plain name.
+SIZE_WORDS = [
+    'large', 'medium', 'small', 'big', 'ripe', 'whole', 'fresh', 'boneless', 'skinless',
+    'groß', 'große', 'großes', 'großer', 'großen',
+    'klein', 'kleine', 'kleines', 'kleiner', 'kleinen',
+    'mittelgroße', 'mittelgroßes', 'mittelgroßer', 'mittlere',
+    'reife', 'reifer', 'reifes', 'frische', 'frischer', 'frisches',
+]
+
+# NEVER_UNIT: the word after the amount is the start of the food, not a unit
+# ("1 egg white", "2 red onions", "1 chicken breast"). Stück goes into the unit
+# slot and the food alias then sees "egg white" or "red onions".
+NEVER_UNITS = [
+    'egg', 'chicken', 'red', 'green', 'yellow', 'white', 'sweet', 'spring', 'bell',
+    'cherry', 'bay', 'vanilla', 'baby', 'lemon', 'lime', 'orange',
+    'rote', 'roter', 'grüne', 'grüner', 'gelbe', 'gelber', 'weiße', 'weißer',
+]
+
+# TRANSPOSE_WORDS: swap the pair so the parser sees unit then food.
+TRANSPOSE_WORDS = [
+    ('garlic', 'clove'),
+    ('garlic', 'cloves'),
+]
+
+# FOOD_ALIAS: whole parsed food -> existing open-data food name. German names
+# are the targets because the shopping list and the price feeds are German;
+# the variants are the spellings recipes actually use. US "large" eggs weigh
+# what EU size M does, so eggs map to Ei (M). Generic flour maps to Weizenmehl
+# 405 rather than Allzweckmehl because that is the shelf label.
+FOOD_ALIASES = [
+    # dairy and eggs
+    ('ungesalzene Butter', ['butter', 'unsalted butter', 'Butter', 'geschmolzene Butter', 'weiche Butter', 'melted butter', 'softened butter']),
+    ('gesalzene Butter', ['salted butter']),
+    ('Butterschmalz', ['clarified butter']),
+    ('Ghee', ['ghee']),
+    ('Ei (M)', ['egg', 'eggs', 'Ei', 'Eier']),
+    ('Eigelb', ['egg yolk', 'egg yolks', 'yolk', 'yolks']),
+    ('Eiweiß', ['egg white', 'egg whites', 'Eiklar']),
+    ('Vollmilch', ['milk', 'whole milk', 'full-fat milk', 'Milch']),
+    ('Fettreduzierte Milch', ['2% milk', 'reduced-fat milk', 'semi-skimmed milk']),
+    ('Entrahmte Milch', ['skim milk', 'skimmed milk', 'nonfat milk', 'Magermilch']),
+    ('Sahne', ['heavy cream', 'heavy whipping cream', 'whipping cream', 'double cream', 'cream', 'Schlagsahne', 'Schlagobers', 'Rahm']),
+    ('halb und halb', ['half and half', 'half-and-half']),
+    ('Saure Sahne', ['sour cream', 'Sauerrahm', 'Schmand']),
+    ('Crème fraîche', ['creme fraiche', 'crème fraiche', 'creme fraîche']),
+    ('Frischkäse', ['cream cheese']),
+    ('Buttermilch', ['buttermilk']),
+    ('Joghurt (3,8% Fett)', ['yogurt', 'yoghurt', 'plain yogurt', 'natural yogurt', 'Joghurt', 'Naturjoghurt']),
+    ('Griechischer Joghurt (Vollmilch)', ['greek yogurt', 'greek yoghurt', 'griechischer Joghurt']),
+    ('Quark', ['quark']),
+    ('Mascarpone', ['mascarpone']),
+    ('Ricotta', ['ricotta', 'ricotta cheese']),
+    ('Parmesan', ['parmesan', 'parmesan cheese', 'parmigiano reggiano', 'parmigiano-reggiano', 'grated parmesan', 'grated parmesan cheese']),
+    ('Cheddar', ['cheddar', 'cheddar cheese', 'sharp cheddar', 'mature cheddar']),
+    ('Feta', ['feta', 'feta cheese']),
+    ('Gouda', ['gouda']),
+    ('Gruyère', ['gruyere', 'gruyère', 'gruyere cheese']),
+    ('Brie', ['brie']),
+    ('Camembert', ['camembert']),
+    ('Paneer', ['paneer']),
+    ('Kondensmilch', ['evaporated milk']),
+    ('gezuckerte Kondensmilch', ['sweetened condensed milk', 'condensed milk']),
+    ('Hafermilch', ['oat milk']),
+    ('Milch, Soja-', ['soy milk', 'Sojamilch']),
+    ('Ungesüßte Mandelmilch', ['almond milk', 'unsweetened almond milk', 'Mandelmilch']),
+    ('Kokosnussmilch', ['coconut milk', 'canned coconut milk', 'full-fat coconut milk', 'Kokosmilch']),
+    ('Vanilleeis', ['vanilla ice cream']),
+
+    # baking
+    ('Weizenmehl 405', ['flour', 'all-purpose flour', 'all purpose flour', 'plain flour', 'white flour', 'ap flour', 'Mehl', 'Weizenmehl', 'Weizenmehl Type 405', 'Einfaches Weizenmehl']),
+    ('Vollkornmehl', ['whole wheat flour', 'whole-wheat flour', 'wholemeal flour', 'Weizenvollkornmehl']),
+    ('Dinkelmehl', ['spelt flour']),
+    ('Roggenmehl', ['rye flour']),
+    ('Kuchenmehl', ['cake flour']),
+    ('Mandeln gemahlen', ['almond flour', 'ground almonds', 'almond meal', 'gemahlene Mandeln']),
+    ('Maisstärke', ['cornstarch', 'corn starch', 'cornflour', 'corn flour', 'Speisestärke', 'Stärke']),
+    ('Mehlmais', ['cornmeal', 'polenta', 'Maismehl', 'Polenta']),
+    ('Mehlgrieß (grob und halb grob)', ['semolina', 'Grieß', 'Hartweizengrieß']),
+    ('Semmelbrösel', ['breadcrumbs', 'bread crumbs', 'panko', 'panko breadcrumbs', 'Paniermehl']),
+    ('Zucker', ['sugar', 'granulated sugar', 'white sugar', 'caster sugar', 'superfine sugar', 'Kristallzucker', 'Feinzucker']),
+    ('brauner Zucker', ['brown sugar', 'light brown sugar', 'dark brown sugar', 'Rohrzucker']),
+    ('Puderzucker', ['powdered sugar', 'icing sugar', "confectioners' sugar", 'confectioners sugar', 'Staubzucker']),
+    ('Honig', ['honey']),
+    ('Ahornsirup', ['maple syrup']),
+    ('Agavendicksaft', ['agave syrup', 'agave nectar', 'agave']),
+    ('Melasse', ['molasses']),
+    ('Vanilleextrakt', ['vanilla extract', 'vanilla essence', 'pure vanilla extract']),
+    ('Backpulver', ['baking powder']),
+    ('Natron', ['baking soda', 'bicarbonate of soda', 'bicarb', 'Speisenatron']),
+    ('Hefe', ['yeast', 'instant yeast', 'active dry yeast', 'dry yeast', 'Trockenhefe']),
+    ('Weinstein', ['cream of tartar']),
+    ('Xanthangummi', ['xanthan gum']),
+    ('ungesüßtes Kakaopulver', ['cocoa powder', 'unsweetened cocoa powder', 'cocoa', 'Kakaopulver', 'Kakao']),
+    ('Schokoladenchips', ['chocolate chips']),
+    ('Kokosnussflocken', ['shredded coconut', 'desiccated coconut', 'coconut flakes', 'Kokosflocken', 'Kokosraspel']),
+    ('Blätterteig, gefroren', ['puff pastry', 'frozen puff pastry', 'Blätterteig']),
+
+    # alliums, aromatics
+    ('gelbe Zwiebel', ['onion', 'onions', 'yellow onion', 'yellow onions', 'brown onion', 'brown onions', 'Zwiebel', 'Zwiebeln']),
+    ('rote Zwiebel', ['red onion', 'red onions']),
+    ('weiße Zwiebel', ['white onion', 'white onions']),
+    ('Schalotte', ['shallot', 'shallots']),
+    ('Frühlingszwiebel', ['scallion', 'scallions', 'spring onion', 'spring onions', 'green onion', 'green onions', 'Lauchzwiebel', 'Lauchzwiebeln']),
+    ('Knoblauch', ['garlic', 'garlic clove', 'garlic cloves', 'clove garlic', 'cloves garlic', 'of garlic', 'Knoblauchzehe', 'Knoblauchzehen']),
+    ('Knoblauchpulver', ['garlic powder']),
+    ('Knoblauchpaste', ['garlic paste']),
+    ('Ingwer', ['ginger', 'fresh ginger', 'ginger root', 'fresh ginger root']),
+    ('Ingwer gemahlen', ['ground ginger']),
+    ('Ingwerpaste', ['ginger paste']),
+    ('Ingwer-Knoblauchpaste', ['ginger garlic paste', 'ginger-garlic paste']),
+    ('rote Chili', ['chili', 'chilli', 'red chili', 'red chilli', 'red chile', 'chili pepper', 'chilies', 'chillies', 'fresh chili', 'Chili', 'Chilischote', 'Chilischoten']),
+    ('Jalapeño', ['jalapeno', 'jalapeño', 'jalapenos', 'jalapeños']),
+
+    # vegetables
+    ('Tomate', ['tomato', 'tomatoes']),
+    ('Kirschtomate', ['cherry tomato', 'cherry tomatoes', 'Cocktailtomaten']),
+    ('Romatomate', ['roma tomato', 'roma tomatoes', 'plum tomato', 'plum tomatoes']),
+    ('Dosentomate', ['canned tomatoes', 'tinned tomatoes', 'diced tomatoes', 'chopped tomatoes', 'can chopped tomatoes', 'tin chopped tomatoes', 'can diced tomatoes', 'whole peeled tomatoes', 'can whole peeled tomatoes', 'Tomaten aus der Dose', 'gehackte Tomaten']),
+    ('Stückige Tomaten (Konserve)', ['crushed tomatoes', 'can crushed tomatoes', 'stückige Tomaten']),
+    ('passierte Tomaten', ['passata', 'tomato passata', 'tomato puree']),
+    ('Tomatenmark', ['tomato paste', 'tomato purée']),
+    ('getrocknete Tomate', ['sun-dried tomatoes', 'sundried tomatoes', 'sun dried tomatoes']),
+    ('Kartoffel', ['potato', 'potatoes']),
+    ('Süßkartoffel', ['sweet potato', 'sweet potatoes']),
+    ('Möhre', ['carrot', 'carrots', 'Karotte', 'Karotten']),
+    ('Sellerie', ['celery', 'celery stalk', 'celery stalks', 'celery stick', 'celery sticks', 'Staudensellerie']),
+    ('Knollensellerie', ['celeriac', 'celery root']),
+    ('Lauch', ['leek', 'leeks', 'Porree']),
+    ('Paprika, rot', ['bell pepper', 'bell peppers', 'red bell pepper', 'red bell peppers', 'red pepper', 'red peppers', 'rote Paprika', 'Paprikaschote', 'Paprikaschoten']),
+    ('Paprika, gelb', ['yellow bell pepper', 'yellow bell peppers', 'yellow pepper', 'gelbe Paprika']),
+    ('Zucchini', ['zucchini', 'zucchinis', 'courgette', 'courgettes']),
+    ('Aubergine', ['eggplant', 'eggplants', 'aubergine', 'aubergines']),
+    ('Gurke', ['cucumber', 'cucumbers', 'Salatgurke']),
+    ('Gurke eingelegt', ['pickles', 'gherkins', 'dill pickles', 'Gewürzgurken', 'Essiggurken']),
+    ('Spinat', ['spinach', 'baby spinach', 'fresh spinach', 'Blattspinat']),
+    ('Grünkohl', ['kale']),
+    ('Mangold', ['chard', 'swiss chard']),
+    ('Brokkoli', ['broccoli', 'broccoli florets']),
+    ('Blumenkohl', ['cauliflower', 'cauliflower florets']),
+    ('Champignon weiß', ['mushroom', 'mushrooms', 'button mushrooms', 'white mushrooms', 'cremini mushrooms', 'chestnut mushrooms', 'Champignon', 'Champignons']),
+    ('Shitake-Pilz', ['shiitake', 'shiitake mushrooms', 'shiitakes']),
+    ('Kohl', ['cabbage', 'green cabbage', 'white cabbage', 'Weißkohl']),
+    ('Rotkohl', ['red cabbage']),
+    ('Rosenkohl', ['brussels sprouts', 'brussel sprouts']),
+    ('Pak Choi', ['bok choy', 'pak choi', 'pak choy']),
+    ('Erbsen', ['peas', 'frozen peas', 'green peas']),
+    ('Grüne Bohnen', ['green beans', 'string beans']),
+    ('Dosenmais', ['corn', 'sweetcorn', 'canned corn', 'corn kernels', 'Mais']),
+    ('Avocado', ['avocado', 'avocados']),
+    ('Kürbis Butternut', ['butternut squash', 'butternut']),
+    ('Spargel grün', ['asparagus', 'green asparagus', 'grüner Spargel']),
+    ('Weißer Spargel', ['white asparagus', 'weißer Spargel']),
+    ('Fenchel', ['fennel', 'fennel bulb']),
+    ('Pastinake', ['parsnip', 'parsnips']),
+    ('Rettich', ['radish', 'radishes', 'Radieschen']),
+    ('Kohlrabi', ['kohlrabi']),
+    ('Oliven schwarz', ['olives', 'black olives', 'kalamata olives', 'Oliven']),
+    ('eingelegte Kapern', ['capers', 'Kapern']),
+    ('Sauerkraut', ['sauerkraut']),
+
+    # fruit
+    ('Zitrone', ['lemon', 'lemons']),
+    ('Zitronensaft', ['lemon juice', 'fresh lemon juice', 'juice of lemon', 'lemon juice of']),
+    ('Zitronenschale', ['lemon zest', 'lemon peel', 'zest of lemon', 'lemon zest of', 'Zitronenabrieb']),
+    ('Limette', ['lime', 'limes']),
+    ('Limettensaft', ['lime juice', 'fresh lime juice', 'juice of lime', 'lime juice of']),
+    ('Orange', ['orange', 'oranges']),
+    ('Orangensaft', ['orange juice', 'juice of orange', 'orange juice of']),
+    ('Äpfel', ['apple', 'apples', 'Apfel']),
+    ('Banane', ['banana', 'bananas']),
+    ('Erdbeere', ['strawberry', 'strawberries']),
+    ('Himbeeren', ['raspberry', 'raspberries']),
+    ('Blaubeeren', ['blueberry', 'blueberries', 'Heidelbeeren']),
+    ('Mango', ['mango', 'mangoes', 'mangos']),
+    ('Ananas', ['pineapple']),
+    ('Weintraube', ['grape', 'grapes', 'Trauben']),
+    ('Wassermelone', ['watermelon']),
+    ('Kiwi', ['kiwi', 'kiwis', 'kiwifruit']),
+    ('Grapefruit', ['grapefruit']),
+    ('Rosinen', ['raisins', 'sultanas']),
+    ('Dattel getrocknet', ['dates', 'medjool dates', 'pitted dates', 'Datteln']),
+    ('Getrocknete Cranberries', ['dried cranberries']),
+
+    # herbs and spices
+    ('Koriander', ['cilantro', 'fresh cilantro', 'cilantro leaves', 'coriander', 'fresh coriander', 'coriander leaves']),
+    ('Koriandersamen', ['coriander seeds']),
+    ('Petersilie', ['parsley', 'fresh parsley', 'flat-leaf parsley', 'flat leaf parsley', 'italian parsley', 'glatte Petersilie']),
+    ('getrocknete Petersilie', ['dried parsley']),
+    ('Basilikum', ['basil', 'fresh basil', 'basil leaves']),
+    ('Basilikum getrocknet', ['dried basil']),
+    ('Thymian', ['thyme', 'fresh thyme']),
+    ('getrockneter Thymian', ['dried thyme']),
+    ('Rosmarin', ['rosemary', 'fresh rosemary']),
+    ('getrockneter Rosmarin', ['dried rosemary']),
+    ('getrockneter Oregano', ['oregano', 'dried oregano']),
+    ('getrockneter Majoran', ['marjoram', 'dried marjoram', 'Majoran']),
+    ('Dill', ['dill', 'fresh dill']),
+    ('Minze', ['mint', 'fresh mint', 'mint leaves']),
+    ('Lorbeerblatt', ['bay leaf', 'bay leaves', 'Lorbeer']),
+    ('Kreuzkümmel', ['cumin', 'ground cumin']),
+    ('Kreuzkümmelsamen', ['cumin seeds']),
+    ('Paprika', ['paprika', 'sweet paprika', 'smoked paprika', 'Paprikapulver', 'Paprika edelsüß']),
+    ('Cayenne Pfeffer', ['cayenne', 'cayenne pepper']),
+    ('Chilipulver', ['chili powder', 'chilli powder']),
+    ('rote Paprika-Flocke', ['red pepper flakes', 'crushed red pepper', 'crushed red pepper flakes', 'chili flakes', 'chilli flakes', 'Chiliflocken']),
+    ('gemahlenes Kurkuma', ['turmeric', 'ground turmeric', 'Kurkuma']),
+    ('Zimt', ['cinnamon', 'ground cinnamon']),
+    ('Zimtstange', ['cinnamon stick', 'cinnamon sticks']),
+    ('gemahlene Muskatnuss', ['nutmeg', 'ground nutmeg', 'Muskat', 'Muskatnuss']),
+    ('Currypulver', ['curry powder']),
+    ('Garam Masala', ['garam masala']),
+    ('Kardamom', ['cardamom', 'ground cardamom']),
+    ('Nelke gemahlen', ['ground cloves']),
+    ('Piment', ['allspice', 'ground allspice']),
+    ('Saffran', ['saffron', 'saffron threads', 'Safran']),
+    ('Fenchelsamen', ['fennel seeds']),
+    ('Mohn', ['poppy seeds']),
+    ('Sesamsamen', ['sesame seeds', 'toasted sesame seeds', 'Sesam']),
+    ('Zwiebelpulver', ['onion powder']),
+    ('Salz', ['salt', 'kosher salt', 'sea salt', 'fine salt', 'table salt', 'fine sea salt', 'flaky sea salt', 'Meersalz',
+              'a pinch of salt', 'pinch of salt', 'salt to taste', 'salt and pepper', 'salt & pepper',
+              'salt and pepper to taste', 'salt and black pepper', 'salt and freshly ground black pepper',
+              'sea salt and black pepper', 'Salz und Pfeffer']),
+    ('schwarzer Pfeffer', ['pepper', 'black pepper', 'ground black pepper', 'freshly ground black pepper', 'freshly ground pepper', 'cracked black pepper', 'Pfeffer']),
+
+    # oils, vinegars, condiments
+    ('Olivenöl', ['olive oil', 'extra virgin olive oil', 'extra-virgin olive oil', 'evoo', 'natives Olivenöl', 'natives Olivenöl extra']),
+    ('Rapsöl', ['oil', 'vegetable oil', 'neutral oil', 'canola oil', 'rapeseed oil', 'cooking oil', 'Öl', 'Pflanzenöl', 'neutrales Öl']),
+    ('Sonnenblumenöl', ['sunflower oil']),
+    ('Sesamöl', ['sesame oil', 'toasted sesame oil']),
+    ('Kokosnussöl', ['coconut oil', 'Kokosöl']),
+    ('Erdnussöl', ['peanut oil']),
+    ('Essig', ['vinegar', 'white vinegar', 'distilled white vinegar']),
+    ('Essig Balsamico', ['balsamic vinegar', 'balsamic', 'Balsamico', 'Balsamicoessig']),
+    ('Essig, Apfel-', ['apple cider vinegar', 'cider vinegar', 'Apfelessig']),
+    ('Rotweinessig', ['red wine vinegar']),
+    ('Weißwein-Essig', ['white wine vinegar', 'Weißweinessig']),
+    ('Reis-Essig', ['rice vinegar', 'rice wine vinegar', 'Reisessig']),
+    ('Sojasauce', ['soy sauce', 'light soy sauce', 'dark soy sauce', 'tamari', 'Sojasoße']),
+    ('Fischsauce', ['fish sauce']),
+    ('Austernsauce', ['oyster sauce']),
+    ('Hoisin-Sauce', ['hoisin sauce', 'hoisin']),
+    ('Sriracha', ['sriracha', 'sriracha sauce']),
+    ('Sambal Oelek', ['sambal oelek', 'sambal']),
+    ('Gochujang Paste', ['gochujang']),
+    ('Miso', ['miso', 'miso paste', 'white miso', 'red miso']),
+    ('Tahini', ['tahini']),
+    ('Tamarindenpaste', ['tamarind paste', 'tamarind']),
+    ('Rote Currypaste', ['red curry paste', 'thai red curry paste']),
+    ('Grüne Currypaste', ['green curry paste', 'thai green curry paste']),
+    ('Worcestersauce', ['worcestershire sauce', 'worcestershire']),
+    ('Senf', ['mustard', 'dijon mustard', 'dijon', 'wholegrain mustard']),
+    ('Ketchup', ['ketchup', 'tomato ketchup']),
+    ('Mayonnaise', ['mayonnaise', 'mayo']),
+    ('Pesto', ['pesto', 'basil pesto']),
+    ('Erdnussbutter cremig', ['peanut butter', 'creamy peanut butter', 'smooth peanut butter', 'Erdnussbutter']),
+
+    # stock, liquids
+    ('Hühner-Fond', ['chicken stock', 'chicken broth', 'Hühnerbrühe', 'Hühnerfond']),
+    ('Gemüsebrühe', ['vegetable stock', 'vegetable broth', 'veg stock', 'Brühe']),
+    ('Wasser', ['water', 'warm water', 'cold water', 'hot water', 'boiling water']),
+    ('Weißwein', ['white wine', 'dry white wine']),
+    ('Rotwein', ['red wine', 'dry red wine']),
+
+    # grains, pasta, pulses
+    ('Nudeln', ['pasta', 'dried pasta']),
+    ('Eiernudeln', ['egg noodles']),
+    ('Reisnudeln', ['rice noodles']),
+    ('Glasnudeln', ['glass noodles', 'cellophane noodles']),
+    ('Langkornreis', ['rice', 'white rice', 'long grain rice', 'long-grain rice', 'Reis']),
+    ('Basmatireis', ['basmati rice', 'basmati']),
+    ('Quinoa', ['quinoa']),
+    ('Couscous', ['couscous']),
+    ('Bulgur', ['bulgur', 'bulgur wheat']),
+    ('Graupen', ['pearl barley', 'barley']),
+    ('Kernige Haferflocken', ['oats', 'rolled oats', 'old-fashioned oats', 'porridge oats', 'Haferflocken']),
+    ('Linsen', ['lentils', 'brown lentils', 'green lentils']),
+    ('rote Linsen', ['red lentils', 'split red lentils']),
+    ('Kichererbsen', ['chickpeas', 'chick peas', 'canned chickpeas', 'can chickpeas', 'garbanzo beans']),
+    ('schwarze Bohnen', ['black beans', 'canned black beans', 'can black beans']),
+    ('Weiße Bohnen', ['white beans', 'cannellini beans', 'canned cannellini beans', 'butter beans', 'navy beans']),
+    ('Vollkornbrot', ['whole wheat bread', 'wholemeal bread']),
+    ('Weißbrot', ['white bread', 'bread']),
+    ('Nährhefeflocken', ['nutritional yeast']),
+
+    # meat and fish
+    ('Hähnchenbrust', ['chicken breast', 'chicken breasts', 'boneless skinless chicken breast', 'boneless skinless chicken breasts', 'skinless chicken breast', 'skinless chicken breasts', 'chicken breast fillets', 'Hähnchenbrustfilet', 'Hähnchenbrustfilets', 'Hühnerbrust']),
+    ('Hähnchenschenkel', ['chicken thigh', 'chicken thighs', 'boneless skinless chicken thighs', 'skinless chicken thighs', 'boneless chicken thighs']),
+    ('Hähnchenkeule', ['chicken drumstick', 'chicken drumsticks', 'chicken legs']),
+    ('Hähnchenflügel', ['chicken wing', 'chicken wings']),
+    ('Rinderhack', ['ground beef', 'beef mince', 'minced beef', 'lean ground beef', 'Hackfleisch', 'Rinderhackfleisch']),
+    ('Rindernacken', ['beef chuck', 'chuck roast', 'beef chuck roast']),
+    ('Bacon', ['bacon', 'streaky bacon', 'bacon rashers', 'Speck', 'Frühstücksspeck']),
+    ('Schinken', ['ham']),
+    ('Chorizo', ['chorizo']),
+    ('Lachsfilet', ['salmon', 'salmon fillet', 'salmon fillets', 'Lachs']),
+    ('Kabeljaufilet', ['cod', 'cod fillet', 'cod fillets', 'Kabeljau']),
+    ('Tunfisch', ['tuna', 'canned tuna', 'tinned tuna', 'can tuna', 'Thunfisch']),
+    ('Sardellenfilet', ['anchovy', 'anchovies', 'anchovy fillets', 'Sardellen']),
+    ('Fester Tofu', ['tofu', 'firm tofu']),
+    ('besonders harter Tofu', ['extra-firm tofu', 'extra firm tofu']),
+    ('Seidentofu', ['silken tofu']),
+    ('Tempeh', ['tempeh']),
+
+    # nuts and seeds
+    ('Walnüsse', ['walnuts', 'walnut halves', 'chopped walnuts']),
+    ('Mandel', ['almonds', 'whole almonds']),
+    ('blanchierte Mandeln', ['blanched almonds', 'slivered almonds', 'flaked almonds', 'Mandelblättchen']),
+    ('Haselnüsse', ['hazelnuts']),
+    ('Pinienkerne', ['pine nuts']),
+    ('Cashewkerne', ['cashews', 'raw cashews', 'cashew nuts']),
+    ('Erdnüsse', ['peanuts']),
+    ('Pistazien', ['pistachios']),
+    ('Pecannüsse', ['pecans', 'pecan nuts', 'Pekannüsse']),
+    ('Kürbiskerne', ['pumpkin seeds', 'pepitas']),
+    ('Sonnenblumenkerne', ['sunflower seeds']),
+    ('Chiasamen', ['chia seeds']),
+    ('Leinsamen', ['flax seeds', 'flaxseed', 'linseed']),
+]
+
+
+def build_rules(known=None):
+    """Expand the tables into Automation rows.
+
+    `known` maps each exact name and plural in the space to the food or unit
+    it resolves to. An alias whose source already resolves to its target would
+    change nothing and is skipped; one that resolves to a stray food an import
+    created is kept, so the stray stops being used. The same source under two
+    targets is a mistake in the tables and raises.
+    """
+    known = known or {}
+    rules = []
+    seen = {}
+
+    def add(type_, param_1, param_2=None, param_3=None):
+        key = (type_, param_1.lower())
+        if type_ == Automation.TRANSPOSE_WORDS:
+            key += ((param_2 or '').lower(),)
+        if key in seen:
+            if seen[key] != (param_2, param_3):
+                raise SystemExit(f'tandoor bootstrap: {type_} {param_1!r} maps to both {seen[key][0]!r} and {param_2!r}')
+            return
+        seen[key] = (param_2, param_3)
+        rules.append({'type': type_, 'param_1': param_1, 'param_2': param_2, 'param_3': param_3})
+
+    for target, variants in UNIT_ALIASES.items():
+        for v in variants:
+            if known.get(v, v) != target:
+                add(Automation.UNIT_ALIAS, v, target)
+    for w in SIZE_WORDS:
+        add(Automation.UNIT_ALIAS, w, 'Stück')
+    for w in NEVER_UNITS:
+        add(Automation.NEVER_UNIT, w, 'Stück')
+    for first, second in TRANSPOSE_WORDS:
+        add(Automation.TRANSPOSE_WORDS, first, second)
+    for target, variants in FOOD_ALIASES:
+        for v in variants:
+            if known.get(v, v) != target:
+                add(Automation.FOOD_ALIAS, v, target)
+    for r in EXTRA_AUTOMATIONS:
+        add(r['type'], r['param_1'], r.get('param_2'), r.get('param_3'))
+    return rules
+
+
+# ---- seeding (everything above is data) ----
 
 
 def target_space():
@@ -81,34 +475,76 @@ def seed_open_data(space):
     return {datatype: steps[datatype]().to_dict() for datatype in DATATYPES}
 
 
-def seed_automations(space):
-    created, updated = [], []
-    for a in AUTOMATIONS:
-        existing = Automation.objects.filter(
-            space=space, type=a['type'], param_1__iexact=a['param_1'],
-        ).first()
-        name = a.get('name') or f"{a['param_1']} → {a.get('param_2', '')}"
+def seed_units(space):
+    created = []
+    for name, plural in EXTRA_UNITS:
+        _, was_created = Unit.objects.get_or_create(space=space, name=name, defaults={'plural_name': plural})
+        if was_created:
+            created.append(name)
+    return created
+
+
+def known_names(space):
+    """Exact name or plural -> the name it resolves to, for foods and units."""
+    known = {}
+    for model in (Food, Unit):
+        for name, plural in model.objects.filter(space=space).values_list('name', 'plural_name'):
+            known[name] = name
+            if plural:
+                known[plural] = name
+    return known
+
+
+def seed_automations(space, rules):
+    created = updated = 0
+    for r in rules:
+        existing = Automation.objects.filter(space=space, type=r['type'], param_1__iexact=r['param_1'])
+        if r['type'] == Automation.TRANSPOSE_WORDS:
+            existing = existing.filter(param_2__iexact=r['param_2'] or '')
+        existing = existing.first()
+        name = f"{r['param_1']} → {r['param_2'] or ''}"[:128]
         if existing is None:
             Automation.objects.create(
-                space=space, created_by=space.created_by, type=a['type'], name=name,
-                param_1=a['param_1'], param_2=a.get('param_2'), param_3=a.get('param_3'),
+                space=space, created_by=space.created_by, type=r['type'], name=name,
+                param_1=r['param_1'], param_2=r['param_2'], param_3=r['param_3'],
             )
-            created.append(name)
-        elif existing.param_2 != a.get('param_2') or existing.param_3 != a.get('param_3'):
-            existing.param_2 = a.get('param_2')
-            existing.param_3 = a.get('param_3')
+            created += 1
+        elif (existing.param_2 or '') != (r['param_2'] or '') or (existing.param_3 or '') != (r['param_3'] or ''):
+            existing.param_2 = r['param_2']
+            existing.param_3 = r['param_3']
             existing.save()
-            updated.append(name)
+            updated += 1
     return {'created': created, 'updated': updated}
+
+
+def missing_targets(space, rules):
+    """Alias targets that are not a food or unit in the space.
+
+    Not fatal: the parser would create the target name on first use. But it
+    means a typo in the tables, or open data that renamed something.
+    """
+    foods = set(Food.objects.filter(space=space).values_list('name', flat=True))
+    units = set(Unit.objects.filter(space=space).values_list('name', flat=True))
+    missing = set()
+    for r in rules:
+        if r['type'] == Automation.FOOD_ALIAS and r['param_2'] not in foods:
+            missing.add(r['param_2'])
+        if r['type'] == Automation.UNIT_ALIAS and r['param_2'] not in units:
+            missing.add(r['param_2'])
+    return sorted(missing)
 
 
 space = target_space()
 with scope(space=space), transaction.atomic():
     open_data = seed_open_data(space)
-    automations = seed_automations(space)
+    units = seed_units(space)
+    rules = build_rules(known_names(space))
+    automations = seed_automations(space, rules)
+    automations['missing_targets'] = missing_targets(space, rules)
 
 changed = (
     any(r['total_created'] or r['total_updated'] for r in open_data.values())
+    or bool(units)
     or bool(automations['created'] or automations['updated'])
 )
 print('TANDOOR_BOOTSTRAP_RESULT ' + json.dumps({
@@ -116,5 +552,7 @@ print('TANDOOR_BOOTSTRAP_RESULT ' + json.dumps({
     'space': space.name,
     'open_data_version': OPEN_DATA_VERSION,
     'open_data': open_data,
+    'units_created': units,
+    'rules': len(rules),
     'automations': automations,
 }, ensure_ascii=False))
