@@ -93,8 +93,6 @@ cwa_settings:
   auto_backup_epub_fixes: 0
   auto_metadata_fetch_enabled: 1
   auto_metadata_smart_application: 1
-  # The first search hit is applied unreviewed. Title and author embedded in the
-  # file are usually right, and a wrong hit there misfiles the book entirely.
   auto_metadata_update_title: 1
   auto_metadata_update_authors: 1
   metadata_provider_hierarchy: "{{ cwa_metadata_providers }}"

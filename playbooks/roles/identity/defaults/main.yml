@@ -74,6 +74,9 @@ authentik_oidc_apps:
     redirect_uris:
       - "https://{{ tunnel_hosts.immich }}/auth/login"
       - "https://{{ tunnel_hosts.immich }}/user-settings"
+      # Tailnet hostname for uploads over Cloudflare's 100 MB body cap.
+      - "https://{{ internal_hosts.immich }}/auth/login"
+      - "https://{{ internal_hosts.immich }}/user-settings"
       # The mobile app's custom scheme. Without this, phone login fails while
       # the browser works.
       - "app.immich:///oauth-callback"

@@ -89,6 +89,7 @@ tunnel_hosts:
 # these are reachable from the tailnet and the LAN, never from the internet.
 internal_hosts:
   paperless: "docs.{{ internal_domain }}"
+  immich: "immich.{{ internal_domain }}"
 
 # Nothing is served over a directly forwarded port any more: every public
 # hostname goes through the outbound-only tunnel. Plex is the sole exception
