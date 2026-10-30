@@ -46,6 +46,7 @@
       HOST_KAVITA={{ tunnel_hosts.kavita }}
       HOST_BOOKBRIDGE={{ tunnel_hosts.bookbridge }}
       HOST_CWA={{ tunnel_hosts.cwa }}
+      INTERNAL_DOMAIN={{ internal_domain }}
       CONFIG_PATH={{ config_path }}
       MEDIA_PATH={{ media_path }}
       DOWNLOADS_PATH={{ downloads_path }}

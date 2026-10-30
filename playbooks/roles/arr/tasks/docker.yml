@@ -19,7 +19,7 @@
       SOULSEEK_PATH={{ soulseek_path }}
       SLSKD_UMASK=0022
       MOUSEHOLE_AUTH_PASSWORD={{ mousehole_auth_password }}
-      MOUSEHOLE_ALLOWED_HOSTS={{ tailscale_hostname }}:5010,{{ host_ip }}:5010
+      MOUSEHOLE_ALLOWED_HOSTS={{ tailscale_hostname }}:5010,{{ host_ip }}:5010,mousehole.{{ internal_domain }}
   no_log: true
 
 - name: create yml config file for soulseek
