@@ -90,6 +90,7 @@ tunnel_hosts:
 internal_hosts:
   paperless: "docs.{{ internal_domain }}"
   immich: "immich.{{ internal_domain }}"
+  cwa: "cwa.{{ internal_domain }}"
 
 # Nothing is served over a directly forwarded port any more: every public
 # hostname goes through the outbound-only tunnel. Plex is the sole exception

@@ -47,9 +47,12 @@ cwa_metadata_providers: >-
 # cwa.yml restarts the container when any value here changes.
 cwa_app_settings:
   config_login_type: 2  # LOGIN_OAUTH
-  # Without a fixed host, Flask-Dance derives the callback from each request,
-  # and a login started on the tailnet port sends an unregistered redirect_uri.
-  config_oauth_redirect_host: "https://{{ tunnel_hosts.cwa }}"
+  # Empty: the callback follows the request host, so OIDC works on both the
+  # public and the cwa.<internal_domain> hostnames (both registered in
+  # authentik). A pinned host also becomes Flask's FORCE_HOST_FOR_REDIRECTS,
+  # which bounced every redirect on the internal hostname to the public one.
+  # OIDC login on the bare tailnet port fails; use the local password there.
+  config_oauth_redirect_host: ""
   config_enable_oauth_group_admin_management: 1
   # Disabling the password form also rejects every password login server-side,
   # which leaves no way in while authentik is down and breaks OPDS passwords.

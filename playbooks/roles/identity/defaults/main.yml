@@ -147,8 +147,8 @@ authentik_oidc_apps:
     groups:
       - family
       - authentik Admins
-  # CWA builds the callback as <config_oauth_redirect_host>/login/generic/authorized,
-  # with the redirect host pinned by roles/books/tasks/cwa.yml. It auto-creates a
+  # CWA builds the callback as <request host>/login/generic/authorized. The
+  # internal hostname bypasses Cloudflare's 100 MB upload cap. It auto-creates a
   # user on first login, so the group bindings below are the only access gate.
   # Members of 'authentik Admins' are made CWA admins on every login.
   - slug: cwa
@@ -158,6 +158,7 @@ authentik_oidc_apps:
     secret_env: OIDC_CWA_SECRET
     redirect_uris:
       - "https://{{ tunnel_hosts.cwa }}/login/generic/authorized"
+      - "https://{{ internal_hosts.cwa }}/login/generic/authorized"
     groups:
       - family
       - authentik Admins
