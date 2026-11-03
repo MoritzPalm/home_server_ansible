@@ -20,6 +20,7 @@
     - "{{ media_path }}/recipes"
     - "{{ media_path }}/recipes/mediafiles"
     - "{{ compose_root }}/kitchen"
+    - "{{ config_path }}/recipe-bridge"
   tags:
     - kitchen
 
@@ -33,6 +34,7 @@
       HOST_IP={{ host_ip }}
       HOST_TANDOOR={{ tunnel_hosts.tandoor }}
       HOST_AUTHENTIK={{ tunnel_hosts.authentik }}
+      INTERNAL_DOMAIN={{ internal_domain }}
       OIDC_TANDOOR_SECRET={{ oidc_tandoor_secret }}
       RECIPES_DB_NAME=recipes
       RECIPES_DB_USER=djangodb
@@ -42,6 +44,8 @@
       DATABASE_DIR={{ database_dir }}
       MEDIA_PATH={{ media_path }}
       FDC_API_KEY={{ tandoor_fdc_api_key }}
+      RECIPE_BRIDGE_TANDOOR_TOKEN={{ recipe_bridge_tandoor_token }}
+      ANTHROPIC_API_KEY={{ anthropic_api_key }}
   no_log: true
   tags:
       - kitchen
@@ -76,7 +80,7 @@
   tags:
     - kitchen
 
-- name: Seed tandoor open data and import automations
+- name: Seed tandoor open data, import automations and the recipe-bridge service account
   community.docker.docker_container_exec:
     container: tandoor
     chdir: /opt/recipes

@@ -70,6 +70,13 @@ tandoor_secret_key: "CHANGEME"
 # but the kitchen role templates it unconditionally, so the key must exist here
 # even if empty. Free key: https://fdc.nal.usda.gov/api-key-signup.html
 tandoor_fdc_api_key: ""
+# Bearer token recipe-bridge uses against Tandoor's API. The kitchen bootstrap
+# creates the 'recipe-bridge' Tandoor user and stores this exact value as its
+# token, so the container and Tandoor agree without a UI step. Tandoor's own
+# format: echo "tda_$(uuidgen | tr 'A-Z-' 'a-z_')"
+recipe_bridge_tandoor_token: "CHANGEME"
+# Anthropic API key for recipe-bridge: https://console.anthropic.com/settings/keys
+anthropic_api_key: "CHANGEME"
 vault_paperless_postgres_password: "CHANGEME"
 # Django SECRET_KEY. Rotating invalidates sessions and password-reset links.
 vault_paperless_secret_key: "CHANGEME"

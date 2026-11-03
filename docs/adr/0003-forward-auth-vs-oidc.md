@@ -19,8 +19,8 @@ breaks them.
 ## Decision
 
 Forward-auth is used **only** where the app has no authentication of its own and
-is browser-only: **Homepage** and **Hevy Insights**. Both would otherwise be
-open to anyone who knows the URL.
+is browser-only: **Homepage**, **Hevy Insights** and **Recipe Bridge**. All three
+would otherwise be open to anyone who knows the URL.
 
 Everything else uses OIDC: **Vikunja**, **Tandoor**, **Immich**, and Paperless
 when it is revived.

@@ -3,22 +3,27 @@
 #
 # Seeds a space with Tandoor's open data (units, supermarket categories,
 # nutrition property types, stores, foods, unit conversions), the English
-# measuring units the open data lacks, and the unit rules below. Safe to
-# re-run: existing objects are matched by open-data slug or name and left
-# alone, so hand edits in the UI survive.
+# measuring units the open data lacks, the unit rules below, and the API
+# service account recipe-bridge signs in with. Safe to re-run: existing
+# objects are matched by open-data slug or name and left alone, so hand edits
+# in the UI survive.
 #
 # The last line of output is `TANDOOR_BOOTSTRAP_RESULT {json}`; the task reads
 # `changed` from it.
 
 import json
+from datetime import timedelta
 from types import SimpleNamespace
 
+from django.contrib.auth.models import Group, User
 from django.db import transaction
+from django.utils import timezone
 from django_scopes import scope, scopes_disabled
+from oauth2_provider.models import AccessToken
 
 from cookbook.helper.HelperFunctions import safe_request
 from cookbook.helper.open_data_importer import OpenDataImporter
-from cookbook.models import Automation, Space, Unit
+from cookbook.models import Automation, Space, Unit, UserSpace
 
 OPEN_DATA_VERSION = {{ tandoor_open_data_version | default('de') | to_json }}
 OPEN_DATA_URL = 'https://raw.githubusercontent.com/TandoorRecipes/open-tandoor-data/main/build/{}.json'
@@ -31,6 +36,12 @@ EXTRA_AUTOMATIONS = json.loads({{ tandoor_extra_automations | default([]) | to_j
 # Order matters: foods reference units, categories and property types by slug,
 # and conversions reference foods and units.
 DATATYPES = ['unit', 'category', 'property', 'store', 'food', 'conversion']
+
+# recipe-bridge authenticates with a bearer token. The value comes from the
+# vault and is stored here verbatim, so the container's environment and this
+# row agree without copying a token out of the UI. Empty skips the account.
+SERVICE_USER = 'recipe-bridge'
+SERVICE_TOKEN = {{ recipe_bridge_tandoor_token | default('') | to_json }}
 
 # ---------------------------------------------------------------------------
 # Unit rules
@@ -273,6 +284,36 @@ def missing_targets(space, rules):
     return sorted({r['param_2'] for r in rules if r['type'] == Automation.UNIT_ALIAS and r['param_2'] not in units})
 
 
+def seed_service_account(space):
+    """User, space membership and API token for recipe-bridge. Returns what changed."""
+    if not SERVICE_TOKEN:
+        return 'skipped'
+    changes = []
+    user, created = User.objects.get_or_create(username=SERVICE_USER)
+    if created:
+        user.set_unusable_password()
+        user.save()
+        changes.append('user')
+    membership, created = UserSpace.objects.get_or_create(user=user, space=space, defaults={'active': True})
+    if created:
+        changes.append('membership')
+    # 'user' is the lowest group allowed to write recipes, foods, units and
+    # conversions through the API; 'admin' would also let it manage the space.
+    group = Group.objects.get(name='user')
+    if not membership.groups.filter(pk=group.pk).exists():
+        membership.groups.add(group)
+        changes.append('group')
+    token, created = AccessToken.objects.get_or_create(
+        token=SERVICE_TOKEN,
+        defaults={'user': user, 'scope': 'read write', 'expires': timezone.now() + timedelta(days=365 * 20)},
+    )
+    if created:
+        changes.append('token')
+    elif token.user_id != user.pk:
+        raise RuntimeError(f'token in the vault already belongs to Tandoor user {token.user.username!r}')
+    return changes
+
+
 space = target_space()
 with scope(space=space), transaction.atomic():
     open_data = seed_open_data(space)
@@ -282,11 +323,13 @@ with scope(space=space), transaction.atomic():
     automations = seed_automations(space, rules)
     automations['dropped_shadowing'] = dropped
     automations['missing_targets'] = missing_targets(space, rules)
+    service_account = seed_service_account(space)
 
 changed = (
     any(r['total_created'] or r['total_updated'] for r in open_data.values())
     or bool(units)
     or bool(automations['created'] or automations['updated'] or automations['dropped_shadowing'])
+    or service_account not in ('skipped', [])
 )
 print('TANDOOR_BOOTSTRAP_RESULT ' + json.dumps({
     'changed': changed,
@@ -296,4 +339,5 @@ print('TANDOOR_BOOTSTRAP_RESULT ' + json.dumps({
     'units_created': units,
     'rules': len(rules),
     'automations': automations,
+    'service_account': service_account,
 }, ensure_ascii=False))

@@ -24,6 +24,13 @@ authentik_proxy_apps:
     description: Workout statistics
     groups:
       - authentik Admins
+  - slug: recipe-bridge
+    name: Recipe Bridge
+    host: "recipe-bridge.{{ internal_domain }}"
+    description: Recipe import for Tandoor
+    groups:
+      - family
+      - authentik Admins
 
 # Apps integrated via OIDC rather than forward-auth. Use this for anything with
 # its own login and/or native (non-browser) clients — a mobile app cannot
