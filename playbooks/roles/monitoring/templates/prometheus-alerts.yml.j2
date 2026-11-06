@@ -475,6 +475,18 @@ groups:
           summary: "CrowdSec raised {{ $value | printf \"%.0f\" }} local alerts in 10m"
           description: "Someone is being caught by local scenarios rather than the blocklist. Check 'cscli alerts list'."
 
+      # Fires for the length of any ban from a local scenario, one alert per
+      # scenario. The metric carries no IP, so a banned home connection looks the
+      # same as a banned attacker until someone checks. Uptime checks stay green
+      # either way, since they do not come from the banned address.
+      - alert: CrowdsecLocalBan
+        expr: sum by (reason) (cs_active_decisions{origin="crowdsec"}) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "CrowdSec banned an IP: {{ $labels.reason }}"
+          description: "All public hostnames return 403 for the banned IP until the ban expires. Check 'docker exec crowdsec cscli decisions list --origin crowdsec'. If it is the home IP, lift it with 'docker exec crowdsec cscli decisions delete --ip <ip>'."
+
       - alert: CrowdsecDown
         expr: up{job="crowdsec"} == 0
         for: 5m

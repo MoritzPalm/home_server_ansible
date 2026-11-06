@@ -46,6 +46,8 @@
     - { path: "{{ traefik_config_dir }}/secrets", mode: "0700" }
     - { path: "{{ traefik_log_dir }}", mode: "0750" }
     - { path: "{{ crowdsec_config_dir }}/config", mode: "0750" }
+    - { path: "{{ crowdsec_config_dir }}/config/parsers", mode: "0755" }
+    - { path: "{{ crowdsec_config_dir }}/config/parsers/s02-enrich", mode: "0755" }
     - { path: "{{ crowdsec_config_dir }}/data", mode: "0750" }
     - { path: "{{ crowdsec_config_dir }}/acquis.d", mode: "0750" }
     # 65532 is the nonroot uid cloudflared runs as; it must be able to read its
@@ -104,6 +106,16 @@
   ansible.builtin.template:
     src: crowdsec-config.yaml.local.j2
     dest: "{{ crowdsec_config_dir }}/config/config.yaml.local"
+    owner: root
+    group: docker
+    mode: "0640"
+  notify: Restart crowdsec
+  tags: [networking]
+
+- name: Render CrowdSec bouncer-rejection whitelist
+  ansible.builtin.template:
+    src: crowdsec-whitelist-bouncer-rejections.yaml.j2
+    dest: "{{ crowdsec_config_dir }}/config/parsers/s02-enrich/whitelist-bouncer-rejections.yaml"
     owner: root
     group: docker
     mode: "0640"
