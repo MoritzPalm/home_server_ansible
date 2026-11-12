@@ -30,7 +30,7 @@ cwa_url: "http://{{ ansible_host }}:8083"
 # Created by CWA on first start with the password admin123; cwa.yml replaces it.
 cwa_admin_username: admin
 # Overridden from the vault when set.
-cwa_hardcover_token: ""
+cwa_hardcover_token: "{{hardcover_api_key | default('')}}" 
 
 # Role bits from cps/constants.py: download 2, change password 16, edit shelves
 # 64, read in browser 256. No upload, metadata edit or delete for regular users.
